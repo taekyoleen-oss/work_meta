@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+  <title>작은 사무실 | 3D로 일하는 업무실</title>
+  <meta name="description" content="담당자에게 지시하고, 봇과 앱을 연결하고, 서랍에서 문서를 꺼내 보는 3D 사무실.">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.min.css">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+</head>
+<body>
+  <canvas id="scene" aria-label="3D 사무실. 왼쪽 메뉴로도 모든 기능을 쓸 수 있습니다."></canvas>
+  <div id="labels" aria-hidden="true"></div>
+
+  <header id="hud">
+    <div class="brand"><strong>작은 사무실</strong><span>지시하고, 보고받고, 보관하는 곳</span></div>
+    <nav id="dock" aria-label="주요 메뉴">
+      <button id="btn-board">업무 보드</button>
+      <button id="btn-docs">문서함</button>
+      <button id="btn-new-agent">담당자 추가</button>
+      <button id="btn-settings">설정</button>
+    </nav>
+    <div id="agent-list" aria-label="담당자 목록"></div>
+  </header>
+
+  <p id="hint">바닥을 눌러 이동 · 드래그로 시점 회전 · 담당자나 서랍을 눌러 열기</p>
+  <aside id="panel" hidden aria-live="polite"></aside>
+
+  <dialog id="viewer">
+    <header><strong id="viewer-title"></strong><span id="viewer-actions"></span><button id="viewer-close">닫기</button></header>
+    <div id="viewer-body"></div>
+  </dialog>
+
+  <dialog id="settings">
+    <form method="dialog" id="settings-form">
+      <h2>설정</h2>
+      <label>접근 키<input id="settings-key" type="password" autocomplete="off"></label>
+      <p class="muted">채팅 봇과 외부 앱은 서버를 거치므로 접근 키가 필요합니다. 키는 이 브라우저에만 저장됩니다. 내장 분석·문서 검색은 키 없이 동작합니다.</p>
+      <p class="muted">업무와 문서는 이 브라우저(IndexedDB)에 저장됩니다.</p>
+      <div class="row"><button value="save" class="primary">저장</button><button value="cancel">취소</button></div>
+    </form>
+  </dialog>
+
+  <noscript>이 앱은 JavaScript가 필요합니다.</noscript>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

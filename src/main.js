@@ -1,10 +1,10 @@
 // 3D 장면: 이동, 클릭 상호작용, 담당자의 근무·협업 연출.
 import * as THREE from 'three';
-import { BOARD_STAND, COFFEE_SPOT, COLS, MAP, MEETING, MEETING_ME, MEETING_SPOTS, MY_SEAT, ROOMS, ROWS, SLOTS, buildOffice, doorSign, doorStand, drawerStand, makeAvatar, toCell, toWorld } from './world.js';
+import { BOARD_STAND, COFFEE_SPOT, COLS, MAP, MEETING, MEETING_ME, MEETING_SPOTS, MY_SEAT, ROOMS, ROWS, SHELF, SLOTS, buildOffice, doorSign, doorStand, drawerStand, makeAvatar, toCell, toWorld } from './world.js';
 import { clampView, findPath, nearestFree } from './nav.js';
 import { all, get, onChange, openStore } from './store.js';
 import { recoverInterrupted, stage } from './agents.js';
-import { initUI, openAgent, openBoard, openDoor, openDrawer, openMeeting } from './ui.js';
+import { initUI, openAgent, openCalendar, openDocById, openDoor, openDrawer, openMeeting } from './ui.js';
 
 const canvas = document.getElementById('scene');
 // 작은 해상도로 그려 CSS로 확대하면 픽셀 아트처럼 보인다.
@@ -37,12 +37,29 @@ const makeBubble = () => { const b = document.createElement('div'); b.className 
 const newActor = (mesh, extra = {}) => ({ mesh, path: [], then: null, sitting: false, bubble: makeBubble(), bubbleUntil: 0, ...extra });
 
 const me = newActor(makeAvatar('#23262d'), { tag: makeTag() });
-me.tag.textContent = '나 · 대표';
+me.tag.textContent = '★ 나 · 대표';
 me.tag.classList.add('me');
 scene.add(me.mesh);
 placeSeated(me, MY_SEAT, 0);
 
 const avatars = new Map();
+
+// 발밑 빛 원판: 평소에는 나만, 대화 중에는 상대와 함께 같은 색으로 켠다.
+const GLOW_ME = '#ffc94d', GLOW_TALK = '#22d3bd';
+function makeGlow() {
+  const g = new THREE.Group(), material = (opacity) => new THREE.MeshBasicMaterial({ transparent: true, opacity, depthWrite: false });
+  g.add(new THREE.Mesh(new THREE.CircleGeometry(1.15, 32), material(0.4)), new THREE.Mesh(new THREE.RingGeometry(1.12, 1.28, 32), material(0.95)));
+  g.rotation.x = -Math.PI / 2;
+  g.position.y = 0.03;
+  scene.add(g);
+  return g;
+}
+function setGlow(g, color, { x, z }, scale) {
+  for (const m of g.children) m.material.color.set(color);
+  g.position.x = x; g.position.z = z;
+  g.scale.setScalar(scale);
+}
+const meGlow = makeGlow(), talkGlow = makeGlow();
 
 function placeSeated(actor, [x, z], yaw) {
   actor.mesh.position.set(x, SIT_Y, z);
@@ -168,6 +185,7 @@ addEventListener('blur', () => keys.clear());
 
 // 입력
 const ray = new THREE.Raycaster();
+ray.params.Line.threshold = 0.01; // 장식용 외곽선이 기본 1단위 범위로 앞의 물체보다 먼저 잡히지 않게
 const ndc = new THREE.Vector2();
 let drag = null;
 const touches = new Map(); // 두 손가락 확대·축소용
@@ -225,8 +243,10 @@ function handleClick(e) {
     walkMe(...SLOTS[a.slot].stand, () => greet(a.id));
   } else if (a.type === 'drawer') {
     walkMe(...drawerStand(a.cabinet), () => { slideDrawer(a.id); openDrawer(a.id); });
-  } else if (a.type === 'board') walkMe(...BOARD_STAND, openBoard);
+  } else if (a.type === 'calendar') walkMe(...BOARD_STAND, openCalendar);
   else if (a.type === 'door') walkMe(...doorStand(a.index), () => { openDoorId = a.index; openDoor(a.index); });
+  else if (a.type === 'shelf') walkToShelf();
+  else if (a.type === 'shelfDoc') walkToShelf(a.id);
 }
 function greet(id) {
   const a = avatars.get(id);
@@ -337,6 +357,45 @@ const roomTags = ROOMS.slice(1).map((r) => {
   tag.textContent = `${r.name} →`;
   return { tag, at: { x: r.minX, z: (r.passage[0] + r.passage[1]) / 2 } };
 });
+// 눌러서 여는 벽 안내판
+function makeLinkSign(text, at, y, onClick) {
+  const tag = makeTag();
+  tag.classList.add('sign', 'link');
+  tag.textContent = text;
+  tag.onclick = onClick;
+  return { tag, at, y };
+}
+const walkToDrawers = (id) => walkMe(...drawerStand(0), () => { slideDrawer(id); openDrawer(id); });
+const walkToCalendar = () => walkMe(...BOARD_STAND, openCalendar);
+const linkSigns = [
+  makeLinkSign('구글 드라이브 열기', { x: drawerStand(1)[0], z: -7.5 }, 2.75, () => walkToDrawers('reports')),
+  makeLinkSign('일정 관리 · 구글 캘린더', { x: 0, z: -7.9 }, 3.25, walkToCalendar),
+];
+// 서류 캐비닛: 놓인 서류를 칸에 올리고 이름표를 단다. 넘치는 서류는 패널 목록에서 본다.
+const walkToShelf = (docId) => walkMe(...SHELF.stand, () => (docId ? openDocById(docId) : openDrawer('shelf')));
+const shelfSign = makeLinkSign('서류 캐비닛', SHELF, 3.3, () => walkToShelf());
+linkSigns.push(shelfSign);
+const shelfTags = office.shelf.map((slot) => {
+  const tag = makeTag();
+  tag.classList.add('sign', 'link', 'doc-name');
+  tag.style.display = 'none';
+  return { slot, tag, doc: null };
+});
+const binderColor = (d) => (/\.pdf$/i.test(d.title) ? '#d9534f' : /\.(pptx?|key|odp)$/i.test(d.title) || d.kind === 'link' ? '#e8963c' : '#5f7fb5');
+async function syncShelf() {
+  const docs = (await all('docs')).filter((d) => d.drawer === 'shelf').sort((a, b) => a.createdAt - b.createdAt);
+  shelfSign.tag.textContent = `서류 캐비닛 · ${docs.length}건`;
+  shelfTags.forEach((s, i) => {
+    const d = s.doc = docs[i] ?? null;
+    s.slot.visible = !!d;
+    s.slot.userData.action = d ? { type: 'shelfDoc', id: d.id } : { type: 'shelf' };
+    if (!d) { s.tag.style.display = 'none'; return; }
+    s.slot.material.color.set(binderColor(d));
+    s.tag.textContent = d.title.replace(/\.[^.]+$/, '');
+    s.tag.title = d.title;
+    s.tag.onclick = () => walkToShelf(d.id);
+  });
+}
 async function syncDoors() {
   for (const [i, tag] of doorTags.entries()) {
     const door = await get('links', `door${i}`);
@@ -367,8 +426,15 @@ function frame() {
   }
   animate(me, t, myMoving, false);
 
-  const near = lastNear;
+  // 패널에서 고른 담당자가 먼저, 없으면 가장 가까운 담당자가 강조 상대다.
+  const near = lastNear, partner = avatars.get(ui.selectedId()) ?? avatars.get(near);
+  const pulse = 1 + Math.sin(t * 4) * 0.06;
+  setGlow(meGlow, partner ? GLOW_TALK : GLOW_ME, me.mesh.position, partner ? pulse : 1);
+  talkGlow.visible = !!partner;
+  if (partner) setGlow(talkGlow, GLOW_TALK, partner.mesh.position, pulse);
+  me.tag.classList.toggle('talking', !!partner);
   for (const [id, a] of avatars) {
+    a.tag.classList.toggle('talking', a === partner);
     const moving = a.path.length > 0;
     if (moving) stepPath(a, dt);
     // 내가 가까이 오면 앉은 채로 나를 돌아본다.
@@ -412,6 +478,12 @@ function frame() {
   }
   for (const [i, tag] of doorTags.entries()) { v3.set(...doorSign(i)); project(tag, { x: v3.x, z: v3.z }, v3.y); }
   for (const { tag, at } of roomTags) project(tag, at, 2.6);
+  for (const { tag, at, y } of linkSigns) project(tag, at, y);
+  for (const { slot, tag, doc } of shelfTags) {
+    if (!doc) continue;
+    tag.style.maxWidth = `${(innerHeight / view.height) * 1.05}px`; // 칸 너비에 맞춰 긴 이름은 줄인다
+    project(tag, slot.position, slot.position.y - 0.1);
+  }
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
@@ -422,7 +494,8 @@ try {
   await recoverInterrupted();
   ui = initUI({
     walkToAgent: (slot, id) => walkMe(...SLOTS[slot].stand, () => greet(id)),
-    walkToDrawers: (id) => walkMe(...drawerStand(0), () => { slideDrawer(id); openDrawer(id); }),
+    walkToDrawers,
+    walkToCalendar,
     walkToDoor: (i) => walkMe(...doorStand(i), () => { openDoorId = i; openDoor(i); }),
     slideDrawer,
     closeScene: () => { slideDrawer(null); openDoorId = null; },
@@ -435,8 +508,10 @@ try {
   document.getElementById('near-me').onclick = () => { view.free = null; zoomTo(7); };
   onChange(syncAgents);
   onChange(syncDoors);
+  onChange(syncShelf);
   await syncAgents();
   await syncDoors();
+  await syncShelf();
   resize();
   frame();
   setTimeout(() => { document.getElementById('hint').hidden = true; }, 15000); // 안내는 잠시 보이고 화면을 비워 준다

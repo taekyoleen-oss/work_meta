@@ -3,8 +3,9 @@ export const DRAWERS = [
   { id: 'plan', cabinet: 0, name: '기획·계약' }, { id: 'finance', cabinet: 0, name: '재무·숫자' }, { id: 'hr', cabinet: 0, name: '인사·총무' },
   { id: 'reports', cabinet: 1, name: '결과 보고서' }, { id: 'data', cabinet: 1, name: '분석 자료' }, { id: 'archive', cabinet: 1, name: '보관' },
   { id: 'links', cabinet: 2, name: '웹페이지' }, { id: 'apps', cabinet: 2, name: '업무 앱' }, { id: 'etc', cabinet: 2, name: '기타' },
+  { id: 'shelf', cabinet: 3, name: '서류 캐비닛' },
 ];
-export const CABINETS = ['서류장 A', '서류장 B', '서류장 C'];
+export const CABINETS = ['서류장 A', '서류장 B', '서류장 C', '사무실 오른쪽 캐비닛'];
 export const MAX_AGENTS = 8;
 
 const SEED = [

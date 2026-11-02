@@ -32,6 +32,7 @@ export const MEETING_SPOTS = [[16.7, -1.6], [21.3, -1.6], [18, 0.1], [20, 0.1], 
 export const MEETING_ME = [19, -3.3];
 export const COFFEE_SPOT = [8.2, 5.9];
 export const BOARD_STAND = [-2.1, -6.6];
+export const SHELF = { x: 7.6, z: -7.45, stand: [7.6, -6.4] };
 const CABINET_X = [-10.4, -7.7, -5];
 export const drawerStand = (cabinet) => [CABINET_X[cabinet], -6.1];
 export const doorStand = (i) => [DOOR_SPOTS[i].x, -6.5];
@@ -150,6 +151,24 @@ function bookshelf(x, parent, block) {
   block(x, z, 3.4, 0.7, 0.2);
 }
 
+// 서류 캐비닛: 칸마다 서류철 하나. 서류가 놓인 칸만 서류철이 보인다.
+function docShelf(parent, block) {
+  const { x, z } = SHELF;
+  const frame = box(3.4, 3, 0.7, mat('#a7b4c6'), x, 1.5, z, parent);
+  frame.userData.action = { type: 'shelf' };
+  const slots = [];
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+    const px = x - 1.08 + c * 1.08, py = 2.42 - r * 0.92;
+    box(1, 0.78, 0.04, mat('#5b6b82'), px, py, z + 0.34, parent, false);
+    const binder = box(0.62, 0.66, 0.14, mat('#ffffff').clone(), px, py, z + 0.42, parent);
+    binder.visible = false;
+    binder.userData.action = { type: 'shelf' }; // 안 보여도 레이캐스트에 잡히므로 빈 칸도 동작이 있어야 한다
+    slots.push(binder);
+  }
+  block(x, z, 3.4, 0.7, 0.2);
+  return { frame, slots };
+}
+
 export function buildOffice(scene) {
   const blocked = new Set();
   const block = (cx, cz, w, d, pad = 0.35) => {
@@ -164,7 +183,7 @@ export function buildOffice(scene) {
     const w = r.maxX - r.minX;
     walkable(plane(w, 16, mat('#ffffff', { map: FLOORS[r.floor](w / 2, 8) }), (r.minX + r.maxX) / 2, 0, 0, scene));
   }
-  walkable(plane(7.6, 3.2, mat('#7c8a93'), 0, 0.01, -6.1, scene));
+  walkable(plane(7.6, 3.2, mat('#d8bc7c'), 0, 0.01, -6.1, scene)); // 대표 자리 러그
 
   // 벽돌 벽. 북쪽만 높게 보이고 나머지는 낮은 턱으로 둔다.
   const wall = (w, h, d, x, z, rx, ry) => box(w, h, d, mat('#ffffff', { map: brick(rx, ry) }), x, h / 2, z, scene, false);
@@ -231,13 +250,15 @@ export function buildOffice(scene) {
     });
   });
 
-  // 업무 보드: 내 자리 뒤쪽 벽
+  // 일정 관리 판: 내 자리 뒤쪽 벽, 구글 캘린더로 연결
   const board = box(3, 1.5, 0.08, mat('#fdfbf5'), 0, 2.2, -7.9, scene);
-  board.userData.action = { type: 'board' };
+  board.userData.action = { type: 'calendar' };
   interactive.push(board);
-  [['#f4d35e', -1, 0.3], ['#a8dadc', 0, 0.3], ['#b7e4c7', 1, 0.3], ['#f4a6a0', -0.5, -0.3], ['#a8dadc', 0.6, -0.3]].forEach(([c, dx, dy]) => {
-    box(0.5, 0.4, 0.03, mat(c), dx, dy, 0.05, board, false);
-  });
+  box(2.8, 0.26, 0.03, mat('#d9534f'), 0, 0.55, 0.05, board, false);
+  const marked = { 3: '#f4d35e', 9: '#a8dadc', 12: '#b7e4c7', 16: '#f4a6a0' };
+  for (let i = 0; i < 21; i++) {
+    box(0.34, 0.26, 0.03, mat(marked[i] ?? '#e9e6dc'), -1.2 + (i % 7) * 0.4, 0.26 - Math.floor(i / 7) * 0.32, 0.05, board, false);
+  }
 
   // 앱 연결 문: 북쪽 벽. 경첩을 축으로 방 안쪽으로 열린다.
   const doors = DOOR_SPOTS.map(({ x }, i) => {
@@ -254,7 +275,8 @@ export function buildOffice(scene) {
     return hinge;
   });
 
-  bookshelf(7.6, scene, block);
+  const shelf = docShelf(scene, block);
+  interactive.push(shelf.frame, ...shelf.slots);
 
   // 탕비실
   box(2.6, 0.9, 0.7, mat('#e5dfd3'), 8.6, 0.45, 7.3, scene);
@@ -293,7 +315,7 @@ export function buildOffice(scene) {
   plant(24.6, -5.2, scene, block, 1.3);
   plant(14.2, 6.8, scene, block, 1.3);
 
-  return { blocked, interactive, drawers, monitors, doors };
+  return { blocked, interactive, drawers, monitors, doors, shelf: shelf.slots };
 }
 
 export function makeAvatar(color, gender = 'male') {

@@ -7,7 +7,16 @@ const panel = $('panel');
 let current = null; // 열린 패널을 다시 그리는 함수
 let ctx;
 let inMeeting = false;
+let selected = null; // 메뉴 버튼 id 또는 담당자 id
+
+function select(key) {
+  selected = key;
+  for (const b of document.querySelectorAll('#dock button, #agent-list button')) {
+    b.setAttribute('aria-pressed', String((b.dataset.agent ?? b.id) === key));
+  }
+}
 const DRIVE_HOME = 'https://drive.google.com/drive/my-drive';
+const CALENDAR_HOME = 'https://calendar.google.com/calendar/u/0/r';
 
 function h(tag, props = {}, ...kids) {
   const el = document.createElement(tag);
@@ -39,6 +48,7 @@ async function show(render, wide = false) {
 function closePanel() {
   current = null;
   panel.hidden = true;
+  select(null);
   ctx.closeScene();
   if (inMeeting) { inMeeting = false; ctx.endMeeting(); }
 }
@@ -47,7 +57,7 @@ const headerRow = (title, sub) => h('div', { className: 'row spread' },
   h('button', { textContent: '닫기', on: { click: closePanel } }));
 
 // 담당자 패널
-export function openAgent(id) { show(() => agentView(id)); }
+export function openAgent(id) { select(id); show(() => agentView(id)); }
 
 async function agentView(id) {
   const agent = await get('agents', id);
@@ -123,7 +133,7 @@ async function agentForm(agent = null) {
 }
 
 // 업무 보드
-export function openBoard() { show(boardView, true); }
+export function openBoard() { select('btn-board'); show(boardView, true); }
 
 async function boardView() {
   const [tasks, agents] = await Promise.all([all('tasks'), all('agents')]);
@@ -168,14 +178,26 @@ async function taskView(id) {
 }
 
 // 문서함
-export function openDrawer(id = 'reports') { show(() => drawerView(id)); }
+// 일정 관리: 구글 캘린더는 다른 사이트 안에 넣을 수 없어 새 탭으로 연다.
+export function openCalendar() { select('btn-calendar'); show(calendarView); }
+
+function calendarView() {
+  return [
+    headerRow('일정 관리', '구글 캘린더와 연결되어 있습니다.'),
+    h('a', { className: 'btn primary', href: CALENDAR_HOME, target: '_blank', rel: 'noopener noreferrer', textContent: '구글 캘린더 열기' }),
+    h('p', { className: 'muted', textContent: '새 탭에서 로그인한 계정의 캘린더가 열립니다.' }),
+  ];
+}
+
+export function openDrawer(id = 'reports') { select('btn-docs'); show(() => drawerView(id)); }
 
 async function drawerView(id) {
-  const drawer = DRAWERS.find((d) => d.id === id);
+  const drawer = DRAWERS.find((d) => d.id === id), shelf = id === 'shelf';
   const docs = (await all('docs')).filter((d) => d.drawer === id).sort((a, b) => b.createdAt - a.createdAt);
   const title = h('input', { placeholder: '제목', 'aria-label': '링크 제목' });
   const url = h('input', { type: 'url', required: true, placeholder: 'https://… (웹페이지·앱 주소)', 'aria-label': '링크 주소' });
   const file = h('input', { type: 'file', multiple: true, 'aria-label': '파일 올리기' });
+  if (shelf) file.accept = '.pdf,.ppt,.pptx,.key,.odp';
   file.addEventListener('change', async () => {
     for (const f of file.files) {
       await put('docs', { id: crypto.randomUUID(), kind: 'file', drawer: id, title: f.name, mime: f.type, blob: f, createdAt: Date.now() });
@@ -195,7 +217,7 @@ async function drawerView(id) {
   const embed = link?.url && driveEmbed(link.url);
   return [
     headerRow(drawer.name, CABINETS[drawer.cabinet]),
-    h('div', { className: 'drop drive' },
+    shelf ? h('p', { className: 'muted', textContent: '올린 서류는 캐비닛 칸에 이름과 함께 놓입니다(앞의 9건). PDF는 앱 안에서 바로 열립니다. 슬라이드 파일은 내려받아 열고, 구글 슬라이드 공유 주소를 넣으면 앱 안에서 봅니다.' }) : h('div', { className: 'drop drive' },
       h('div', { className: 'row' },
         h('a', { className: 'btn primary', href: link?.url || DRIVE_HOME, target: '_blank', rel: 'noopener noreferrer', textContent: '구글 드라이브 열기' }),
         embed ? h('button', { textContent: '여기서 보기', on: { click: () => openDoc({ kind: 'link', title: `${drawer.name} 드라이브`, url: link.url, mime: '' }) } }) : null),
@@ -205,9 +227,9 @@ async function drawerView(id) {
       textContent: d.name, 'aria-pressed': String(d.id === id),
       on: { click: () => { ctx.slideDrawer(d.id); openDrawer(d.id); } },
     }))),
-    docs.length ? docs.map(docRow) : h('p', { className: 'muted', textContent: '이 서랍은 비어 있습니다.' }),
+    docs.length ? docs.map(docRow) : h('p', { className: 'muted', textContent: shelf ? '아직 놓인 서류가 없습니다.' : '이 서랍은 비어 있습니다.' }),
     h('div', { className: 'drop' },
-      h('label', {}, 'PDF, HTML, 이미지, CSV 등 파일 넣기', file),
+      h('label', {}, shelf ? 'PDF, 슬라이드 파일 올리기' : 'PDF, HTML, 이미지, CSV 등 파일 넣기', file),
       h('form', { on: { submit: addLink } }, title, h('div', { style: 'height:6px' }), url, h('div', { style: 'height:6px' }), h('button', { textContent: '링크 넣기' }))),
   ].flat();
 }
@@ -221,7 +243,7 @@ function docRow(d) {
 }
 
 // 앱 연결 문
-export function openDoor(i) { show(() => doorView(i)); }
+export function openDoor(i) { select('btn-door'); show(() => doorView(i)); }
 
 async function doorView(i) {
   const door = (await get('links', `door${i}`)) ?? { id: `door${i}`, name: '', url: '' }; // 새로 추가한 문은 기존 브라우저 DB에 없다
@@ -245,6 +267,7 @@ async function doorView(i) {
 // 회의
 export function openMeeting() {
   inMeeting = true;
+  select('btn-meeting');
   show(meetingView);
 }
 
@@ -271,6 +294,11 @@ async function meetingView() {
 }
 
 // 문서 보기
+export async function openDocById(id) {
+  const d = await get('docs', id);
+  if (d) await openDoc(d);
+}
+
 let blobUrl = null;
 async function openDoc(d) {
   if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
@@ -298,11 +326,11 @@ async function openDoc(d) {
   } else if (d.mime.startsWith('image/') && d.mime !== 'image/svg+xml') {
     blobUrl = URL.createObjectURL(d.blob);
     body.replaceChildren(h('img', { src: blobUrl, alt: d.title }));
-  } else if (/^text\/|json|csv|xml/.test(d.mime) || /\.(csv|tsv|txt|md|json)$/i.test(d.title)) {
+  } else if (/^text\/|json|csv|[/+]xml$/.test(d.mime) || /\.(csv|tsv|txt|md|json)$/i.test(d.title)) {
     body.replaceChildren(h('pre', { textContent: await d.blob.text() }));
   } else {
     blobUrl = URL.createObjectURL(d.blob);
-    body.replaceChildren(h('p', { style: 'padding:18px' }, '이 형식은 미리 볼 수 없습니다. ', h('a', { href: blobUrl, download: d.title, textContent: '내려받기' })));
+    body.replaceChildren(h('p', { style: 'padding:18px' }, /\.(pptx?|key|odp)$/i.test(d.title) ? '슬라이드 파일은 브라우저에서 바로 볼 수 없습니다. 내려받아 여세요. ' : '이 형식은 미리 볼 수 없습니다. ', h('a', { href: blobUrl, download: d.title, textContent: '내려받기' })));
   }
   $('viewer').showModal();
 }
@@ -311,8 +339,10 @@ async function renderAgentList() {
   const agents = (await all('agents')).sort((a, b) => a.slot - b.slot);
   $('agent-list').replaceChildren(...agents.map((a) => h('button', {
     title: a.role,
-    on: { click: () => ctx.walkToAgent(a.slot, a.id) },
+    on: { click: () => { select(a.id); ctx.walkToAgent(a.slot, a.id); } },
   }, h('span', { className: 'dot', style: `background:${a.color}` }), a.name)));
+  [...$('agent-list').children].forEach((b, i) => { b.dataset.agent = agents[i].id; });
+  select(selected);
   $('btn-new-agent').disabled = agents.length >= MAX_AGENTS;
 }
 
@@ -378,11 +408,12 @@ export function initUI(context) {
   ctx = context;
   initLayout();
   $('btn-board').onclick = openBoard;
-  $('btn-docs').onclick = () => ctx.walkToDrawers('reports');
+  $('btn-calendar').onclick = () => { select('btn-calendar'); ctx.walkToCalendar(); };
+  $('btn-docs').onclick = () => { select('btn-docs'); ctx.walkToDrawers('reports'); };
   $('btn-meeting').onclick = ctx.startMeeting;
-  $('btn-door').onclick = () => ctx.walkToDoor(0);
+  $('btn-door').onclick = () => { select('btn-door'); ctx.walkToDoor(0); };
   $('chat').addEventListener('submit', sendChat);
-  $('btn-new-agent').onclick = () => show(() => agentForm());
+  $('btn-new-agent').onclick = () => { select('btn-new-agent'); show(() => agentForm()); };
   $('btn-settings').onclick = () => { $('settings-key').value = accessKey.get(); $('settings').showModal(); };
   $('settings').addEventListener('close', () => { if ($('settings').returnValue === 'save') accessKey.set($('settings-key').value.trim()); });
   $('viewer-close').onclick = () => $('viewer').close();
@@ -395,7 +426,7 @@ export function initUI(context) {
     if (current && !editing && !panel.querySelector('form input[required]:focus')) show(current, panel.classList.contains('wide'));
   });
   renderAgentList();
-  return { setTalkTarget };
+  return { setTalkTarget, selectedId: () => selected };
 }
 
 // 사무실 대화: 가까운 담당자에게, 없으면 총괄에게 지시가 간다. 총괄은 @이름이나 키워드로 나눈다.

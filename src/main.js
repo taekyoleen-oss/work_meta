@@ -367,10 +367,11 @@ function makeLinkSign(text, at, y, onClick) {
   return { tag, at, y };
 }
 const walkToDrawers = (id) => walkMe(...drawerStand(0), () => { slideDrawer(id); openDrawer(id); });
-const walkToCabinet = (c) => { const id = DRAWERS.find((d) => d.cabinet === c).id; walkMe(...drawerStand(c), () => { slideDrawer(id); openDrawer(id); }); };
+// 안내판 링크는 걸어가지 않고 그 자리에서 바로 연다.
+const openCabinet = (c) => { const id = DRAWERS.find((d) => d.cabinet === c).id; slideDrawer(id); openDrawer(id); };
 const walkToCalendar = () => walkMe(...BOARD_STAND, openCalendar);
 // 서류장마다 연결된 구글 드라이브 계정 안내판
-const driveSigns = [0, 1, 2].map((c) => makeLinkSign('', { x: drawerStand(c)[0], z: -7.5 }, 2.75, () => walkToCabinet(c)));
+const driveSigns = [0, 1, 2].map((c) => makeLinkSign('', { x: drawerStand(c)[0], z: -7.5 }, 2.75, () => openCabinet(c)));
 for (const s of driveSigns) s.tag.classList.add('acct');
 async function syncDriveSigns() {
   const accounts = await driveAccounts();
@@ -381,7 +382,7 @@ const linkSigns = [...driveSigns,
 ];
 // 서류 캐비닛: 놓인 서류를 칸에 올리고 이름표를 단다. 넘치는 서류는 패널 목록에서 본다.
 const walkToShelf = (docId) => walkMe(...SHELF.stand, () => (docId ? openDocById(docId) : openDrawer('shelf')));
-const shelfSign = makeLinkSign('서류 캐비닛', SHELF, 3.3, () => walkToShelf());
+const shelfSign = makeLinkSign('서류 캐비닛', SHELF, 3.3, () => openDrawer('shelf'));
 linkSigns.push(shelfSign);
 const shelfTags = office.shelf.map((slot) => {
   const tag = makeTag();
@@ -401,7 +402,7 @@ async function syncShelf() {
     s.slot.material.color.set(binderColor(d));
     s.tag.textContent = d.title.replace(/\.[^.]+$/, '');
     s.tag.title = d.title;
-    s.tag.onclick = () => walkToShelf(d.id);
+    s.tag.onclick = () => openDocById(d.id);
   });
 }
 async function syncDoors() {

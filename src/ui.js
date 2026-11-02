@@ -507,10 +507,10 @@ export function initUI(context) {
   ctx = context;
   initLayout();
   $('btn-board').onclick = openBoard;
-  $('btn-calendar').onclick = () => { select('btn-calendar'); ctx.walkToCalendar(); };
-  $('btn-docs').onclick = () => { select('btn-docs'); ctx.walkToDrawers('reports'); };
+  $('btn-calendar').onclick = openCalendar;
+  $('btn-docs').onclick = () => ctx.openDrawerAt('reports');
   $('btn-meeting').onclick = ctx.startMeeting;
-  $('btn-door').onclick = () => { select('btn-door'); ctx.walkToDoor(0); };
+  $('btn-door').onclick = () => { select('btn-door'); ctx.openDoorAt(0); };
   $('chat').addEventListener('submit', sendChat);
   $('btn-new-agent').onclick = () => { select('btn-new-agent'); show(() => agentForm()); };
   $('btn-settings').onclick = () => { $('settings-key').value = accessKey.get(); $('settings-gclient').value = gdrive.clientId.get(); $('settings').showModal(); };

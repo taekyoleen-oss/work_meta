@@ -1,6 +1,6 @@
 // 3D 장면: 이동, 클릭 상호작용, 담당자의 근무·협업 연출.
 import * as THREE from 'three';
-import { BOARD_STAND, COFFEE_SPOT, COLS, MAP, MEETING, MEETING_ME, MEETING_SPOTS, MY_SEAT, ROOMS, ROWS, SHELF, SLOTS, buildOffice, doorSign, doorStand, drawerStand, makeAvatar, toCell, toWorld } from './world.js';
+import { COFFEE_SPOT, COLS, MAP, MEETING, MEETING_ME, MEETING_SPOTS, MY_SEAT, ROOMS, ROWS, SHELF, SLOTS, buildOffice, doorSign, drawerStand, makeAvatar, toCell, toWorld } from './world.js';
 import { clampView, findPath, nearestFree } from './nav.js';
 import { CABINETS, DRAWERS, all, driveAccounts, get, onChange, openStore, seedDriveAccounts } from './store.js';
 import { loadConfig } from './gdrive.js';
@@ -242,12 +242,12 @@ function handleClick(e) {
   const a = o.userData.action;
   if (a.type === 'agent') {
     walkMe(...SLOTS[a.slot].stand, () => greet(a.id));
-  } else if (a.type === 'drawer') {
-    walkMe(...drawerStand(a.cabinet), () => { slideDrawer(a.id); openDrawer(a.id); });
-  } else if (a.type === 'calendar') walkMe(...BOARD_STAND, openCalendar);
-  else if (a.type === 'door') walkMe(...doorStand(a.index), () => { openDoorId = a.index; openDoor(a.index); });
-  else if (a.type === 'shelf') walkToShelf();
-  else if (a.type === 'shelfDoc') walkToShelf(a.id);
+  // 서랍·캐비닛·일정판·문은 걸어가지 않고 그 자리에서 바로 연다. 담당자만 걸어가서 대화한다.
+  } else if (a.type === 'drawer') openDrawerAt(a.id);
+  else if (a.type === 'calendar') openCalendar();
+  else if (a.type === 'door') openDoorAt(a.index);
+  else if (a.type === 'shelf') openDrawer('shelf');
+  else if (a.type === 'shelfDoc') openDocById(a.id);
 }
 function greet(id) {
   const a = avatars.get(id);
@@ -257,6 +257,8 @@ function greet(id) {
 
 let openDrawerId = null, openDoorId = null;
 function slideDrawer(id) { openDrawerId = id; }
+const openDrawerAt = (id) => { slideDrawer(id); openDrawer(id); };
+const openDoorAt = (i) => { openDoorId = i; openDoor(i); };
 
 // 가장 가까운 대화 상대
 function nearestAgent() {
@@ -366,10 +368,8 @@ function makeLinkSign(text, at, y, onClick) {
   tag.onclick = onClick;
   return { tag, at, y };
 }
-const walkToDrawers = (id) => walkMe(...drawerStand(0), () => { slideDrawer(id); openDrawer(id); });
 // 안내판 링크는 걸어가지 않고 그 자리에서 바로 연다.
-const openCabinet = (c) => { const id = DRAWERS.find((d) => d.cabinet === c).id; slideDrawer(id); openDrawer(id); };
-const walkToCalendar = () => walkMe(...BOARD_STAND, openCalendar);
+const openCabinet = (c) => openDrawerAt(DRAWERS.find((d) => d.cabinet === c).id);
 // 서류장마다 연결된 구글 드라이브 계정 안내판
 const driveSigns = [0, 1, 2].map((c) => makeLinkSign('', { x: drawerStand(c)[0], z: -7.5 }, 2.75, () => openCabinet(c)));
 for (const s of driveSigns) s.tag.classList.add('acct');
@@ -381,7 +381,6 @@ const linkSigns = [...driveSigns,
   makeLinkSign('일정 관리 · 구글 캘린더', { x: 0, z: -7.9 }, 3.25, openCalendar),
 ];
 // 서류 캐비닛: 놓인 서류를 칸에 올리고 이름표를 단다. 넘치는 서류는 패널 목록에서 본다.
-const walkToShelf = (docId) => walkMe(...SHELF.stand, () => (docId ? openDocById(docId) : openDrawer('shelf')));
 const shelfSign = makeLinkSign('서류 캐비닛', SHELF, 3.3, () => openDrawer('shelf'));
 linkSigns.push(shelfSign);
 const shelfTags = office.shelf.map((slot) => {
@@ -504,9 +503,8 @@ try {
   await recoverInterrupted();
   ui = initUI({
     walkToAgent: (slot, id) => walkMe(...SLOTS[slot].stand, () => greet(id)),
-    walkToDrawers,
-    walkToCalendar,
-    walkToDoor: (i) => walkMe(...doorStand(i), () => { openDoorId = i; openDoor(i); }),
+    openDrawerAt,
+    openDoorAt,
     slideDrawer,
     closeScene: () => { slideDrawer(null); openDoorId = null; },
     meSay: (text) => say(me, text),

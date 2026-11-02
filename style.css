@@ -20,10 +20,16 @@ h3 { margin: 18px 0 6px; font-size: 14px; }
 .spread { justify-content: space-between; }
 .grow { flex: 1; min-width: 0; }
 
-#hud { position: fixed; top: 14px; left: 14px; width: 190px; display: grid; gap: 10px; pointer-events: none; }
+#hud { position: fixed; top: 14px; left: 14px; width: 190px; max-height: calc(100dvh - 8px); overflow-y: auto; display: grid; gap: 10px; pointer-events: none; }
 #hud > * { pointer-events: auto; }
-.brand { color: var(--ink); pointer-events: none; }
-.brand strong { display: block; font-size: 20px; letter-spacing: -.03em; }
+.hud-bar { display: flex; gap: 6px; align-items: center; padding: 4px; background: #fffaf3e8; border-radius: 12px; }
+.brand { color: var(--ink); flex: 1; min-width: 0; }
+#btn-fold { flex: none; padding: 4px 9px; }
+.grip { flex: none; padding: 4px 6px; border: 0; background: none; color: var(--muted); cursor: grab; touch-action: none; user-select: none; }
+.grip:active { cursor: grabbing; }
+#hud.folded { width: auto; right: auto; }
+#hud.folded #dock, #hud.folded #agent-list, #hud.folded .brand span { display: none; }
+.brand strong { display: block; font-size: 17px; letter-spacing: -.03em; }
 .brand span { font-size: 12px; }
 #dock, #agent-list { display: grid; gap: 6px; }
 #dock button, #agent-list button { text-align: left; background: #fffaf3e8; }
@@ -40,7 +46,7 @@ h3 { margin: 18px 0 6px; font-size: 14px; }
 .tag small { color: var(--muted); }
 .tag.me { background: #2a6f97; color: #fff; }
 .speech { position: absolute; left: 0; top: 0; max-width: 220px; padding: 6px 12px; border-radius: 12px; background: #fff; box-shadow: 0 3px 12px #0003; font-size: 13px; }
-#chat { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); width: min(620px, calc(100vw - 28px)); display: flex; gap: 8px; align-items: center; padding: 6px 8px 6px 14px; background: var(--paper); border-radius: 14px; box-shadow: 0 6px 20px #38412b40; }
+#chat { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); width: min(620px, calc(100vw - 28px)); display: flex; gap: 8px; align-items: center; padding: 6px 8px 6px 6px; background: var(--paper); border-radius: 14px; box-shadow: 0 6px 20px #38412b40; }
 #chat-target { flex: none; font-size: 13px; font-weight: 600; color: var(--accent); }
 #chat input { flex: 1; min-width: 0; border: 0; background: none; }
 #chat button { flex: none; }
@@ -80,7 +86,7 @@ dialog::backdrop { background: #2f3a2c80; }
 #viewer-body pre { margin: 0; padding: 18px; white-space: pre-wrap; word-break: break-word; font: inherit; }
 
 @media (max-width: 720px) {
-  #hud { width: auto; right: 14px; }
+  #hud { width: auto; right: 14px; top: 8px; left: 8px; }
   #dock { grid-auto-flow: column; grid-auto-columns: 1fr; }
   #dock button { padding: 6px 4px; font-size: 12px; text-align: center; }
   #agent-list { display: flex; overflow-x: auto; }

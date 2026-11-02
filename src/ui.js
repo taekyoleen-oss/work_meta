@@ -316,8 +316,67 @@ async function renderAgentList() {
   $('btn-new-agent').disabled = agents.length >= MAX_AGENTS;
 }
 
+// 메뉴, 화면 도구, 대화창은 손잡이로 옮길 수 있고 자리는 이 브라우저에 저장한다.
+const LAYOUT_KEY = 'office-layout';
+function readLayout() {
+  try { return JSON.parse(localStorage.getItem(LAYOUT_KEY)) ?? {}; } catch { return {}; }
+}
+const layout = readLayout();
+const saveLayout = () => localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout));
+
+function place(el, [x, y]) {
+  el.style.cssText = ''; // 본래 크기를 재고 나서 화면 안으로 제한한다
+  const { width, height } = el.getBoundingClientRect();
+  const left = Math.max(0, Math.min(innerWidth - width, x)), top = Math.max(0, Math.min(innerHeight - height, y));
+  Object.assign(el.style, { left: `${left}px`, top: `${top}px`, right: 'auto', bottom: 'auto', transform: 'none', width: `${width}px` });
+  return [left, top];
+}
+function makeMovable(el) {
+  const grip = el.querySelector('.grip');
+  const moveTo = (pos) => { layout[el.id] = place(el, pos); };
+  let offset = null;
+  grip.addEventListener('pointerdown', (e) => {
+    const r = el.getBoundingClientRect();
+    offset = [e.clientX - r.left, e.clientY - r.top];
+    grip.setPointerCapture(e.pointerId);
+  });
+  grip.addEventListener('pointermove', (e) => { if (offset) moveTo([e.clientX - offset[0], e.clientY - offset[1]]); });
+  const drop = () => { if (offset) saveLayout(); offset = null; };
+  grip.addEventListener('pointerup', drop);
+  grip.addEventListener('pointercancel', drop);
+  grip.addEventListener('dblclick', () => { delete layout[el.id]; el.style.cssText = ''; saveLayout(); });
+  grip.addEventListener('keydown', (e) => {
+    const step = { ArrowLeft: [-24, 0], ArrowRight: [24, 0], ArrowUp: [0, -24], ArrowDown: [0, 24] }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    const r = el.getBoundingClientRect();
+    moveTo([r.left + step[0], r.top + step[1]]);
+    saveLayout();
+  });
+}
+function initLayout() {
+  const movable = ['hud', 'view-tools', 'chat'].map($);
+  const restore = () => { for (const el of movable) if (layout[el.id]) layout[el.id] = place(el, layout[el.id]); };
+  movable.forEach(makeMovable);
+  const fold = (folded) => {
+    $('hud').classList.toggle('folded', folded);
+    $('btn-fold').setAttribute('aria-expanded', String(!folded));
+    $('btn-fold').setAttribute('aria-label', folded ? '메뉴 펼치기' : '메뉴 접기');
+    restore();
+  };
+  // 좁은 화면에서는 메뉴가 사무실을 가리므로 접은 채로 시작한다.
+  fold(layout.folded ?? matchMedia('(max-width: 720px)').matches);
+  $('btn-fold').onclick = () => {
+    layout.folded = !$('hud').classList.contains('folded');
+    saveLayout();
+    fold(layout.folded);
+  };
+  addEventListener('resize', restore);
+}
+
 export function initUI(context) {
   ctx = context;
+  initLayout();
   $('btn-board').onclick = openBoard;
   $('btn-docs').onclick = () => ctx.walkToDrawers('reports');
   $('btn-meeting').onclick = ctx.startMeeting;

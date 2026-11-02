@@ -439,6 +439,7 @@ try {
   await syncDoors();
   resize();
   frame();
+  setTimeout(() => { document.getElementById('hint').hidden = true; }, 15000); // 안내는 잠시 보이고 화면을 비워 준다
 } catch (e) {
   document.getElementById('hint').textContent = `시작 실패: ${e.message}`;
   throw e;

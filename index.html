@@ -15,7 +15,11 @@
   <div id="labels" aria-hidden="true"></div>
 
   <header id="hud">
-    <div class="brand"><strong>작은 사무실</strong><span>지시하고, 보고받고, 보관하는 곳</span></div>
+    <div class="hud-bar">
+      <button type="button" class="grip" aria-label="메뉴 옮기기" title="끌어서 옮기기 · 두 번 누르면 원래 자리로">⠿</button>
+      <div class="brand"><strong>작은 사무실</strong><span>지시하고, 보고받고, 보관하는 곳</span></div>
+      <button type="button" id="btn-fold" aria-controls="dock agent-list">☰</button>
+    </div>
     <nav id="dock" aria-label="주요 메뉴">
       <button id="btn-board">업무 보드</button>
       <button id="btn-docs">문서함</button>
@@ -28,12 +32,14 @@
   </header>
 
   <div id="view-tools" role="group" aria-label="화면 조절">
+    <button type="button" class="grip" aria-label="화면 도구 옮기기" title="끌어서 옮기기 · 두 번 누르면 원래 자리로">⠿</button>
     <button id="zoom-out" aria-label="축소">−</button>
     <button id="zoom-in" aria-label="확대">+</button>
     <button id="near-me">내 근처로</button>
   </div>
   <p id="hint">바닥을 눌러 이동 · 끌어서 둘러보기 · 휠이나 +, −로 확대·축소 · 오른쪽 통로로 미팅룸의 앱 문까지 이동</p>
   <form id="chat" autocomplete="off">
+    <button type="button" class="grip" aria-label="대화창 옮기기" title="끌어서 옮기기 · 두 번 누르면 원래 자리로">⠿</button>
     <span id="chat-target">총괄에게</span>
     <input id="chat-input" maxlength="2000" aria-label="사무실 대화" placeholder="여기에 말하면 총괄이 담당자에게 나눕니다">
     <button class="primary">말하기</button>

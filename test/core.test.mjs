@@ -4,6 +4,7 @@ import { clampView, findPath, nearestFree } from '../src/nav.js';
 import { analyze, parseDelimited } from '../src/analyze.js';
 import { driveEmbed, parseMentions, routeByKeywords } from '../src/agents.js';
 import handler from '../api/agent.js';
+import { toDoc } from '../src/gdrive.js';
 
 test('길찾기는 벽을 돌아가고 대각선으로 모서리를 뚫지 않는다', () => {
   const blocked = new Set(['2,0', '2,1', '2,2', '2,3']);
@@ -52,6 +53,14 @@ test('드라이브 주소만 임베드 주소로 바꾼다', () => {
   assert.equal(driveEmbed('https://docs.google.com/document/d/x_1/edit'), 'https://docs.google.com/document/d/x_1/preview');
   assert.equal(driveEmbed('https://drive.google.com/drive/my-drive'), null);
   assert.equal(driveEmbed('https://evil.com/drive/folders/abc'), null);
+});
+
+test('드라이브 파일은 서랍 위치와 미리보기 주소를 가진 문서가 된다', () => {
+  const d = toDoc({ id: 'f1', name: '안.pptx', mimeType: 'application/vnd.ms-powerpoint', createdTime: '2026-11-02T00:00:00Z', appProperties: { drawer: 'shelf' } });
+  assert.equal(d.id, 'drive:f1');
+  assert.equal(d.drawer, 'shelf');
+  assert.equal(driveEmbed(d.url), 'https://drive.google.com/file/d/f1/preview');
+  assert.equal(toDoc({ id: 'f2', name: 'x', mimeType: '' }).drawer, 'etc');
 });
 
 const call = async (body, headers = {}, method = 'POST') => {

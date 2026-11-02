@@ -26,7 +26,7 @@ const stamp = (task, text) => task.log.push({ at: Date.now(), text });
 
 export async function docText(doc) {
   if (doc.kind === 'text') return doc.text;
-  if (doc.kind === 'link') return doc.url;
+  if (doc.kind === 'link' || doc.kind === 'drive') return doc.url;
   if (/^text\/|json|xml|csv/.test(doc.mime) || /\.(csv|tsv|txt|md|json|html?)$/i.test(doc.title)) return doc.blob.text();
   throw new Error(`이 문서 형식은 내용을 읽을 수 없습니다: ${doc.title}`);
 }

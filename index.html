@@ -56,7 +56,9 @@
       <h2>설정</h2>
       <label>접근 키<input id="settings-key" type="password" autocomplete="off"></label>
       <p class="muted">채팅 봇과 외부 앱은 서버를 거치므로 접근 키가 필요합니다. 키는 이 브라우저에만 저장됩니다. 내장 분석·문서 검색은 키 없이 동작합니다.</p>
-      <p class="muted">업무와 문서는 이 브라우저(IndexedDB)에 저장됩니다.</p>
+      <label>구글 클라이언트 ID<input id="settings-gclient" autocomplete="off" placeholder="…apps.googleusercontent.com"></label>
+      <p class="muted">넣으면 서랍과 캐비닛에 올린 파일을 구글 드라이브에 저장하고 불러옵니다. 만드는 방법은 README를 참고하세요.</p>
+      <p class="muted">업무와 문서는 이 브라우저(IndexedDB)에 저장됩니다. 구글 드라이브에 연결하면 올린 파일은 드라이브에 저장됩니다.</p>
       <div class="row"><button value="save" class="primary">저장</button><button value="cancel">취소</button></div>
     </form>
   </dialog>

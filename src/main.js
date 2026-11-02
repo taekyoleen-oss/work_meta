@@ -1,7 +1,7 @@
 // 3D 장면: 이동, 클릭 상호작용, 담당자의 근무·협업 연출.
 import * as THREE from 'three';
 import { BOARD_STAND, COFFEE_SPOT, COLS, MAP, MEETING, MEETING_ME, MEETING_SPOTS, MY_SEAT, ROOMS, ROWS, SLOTS, buildOffice, doorSign, doorStand, drawerStand, makeAvatar, toCell, toWorld } from './world.js';
-import { findPath, nearestFree } from './nav.js';
+import { clampView, findPath, nearestFree } from './nav.js';
 import { all, get, onChange, openStore } from './store.js';
 import { recoverInterrupted, stage } from './agents.js';
 import { initUI, openAgent, openBoard, openDoor, openDrawer, openMeeting } from './ui.js';
@@ -137,17 +137,32 @@ setInterval(() => {
 
 // 고정 시점: 남쪽 위에서 북쪽 벽을 비스듬히 내려다본다. 휠은 확대·축소.
 const PITCH = 0.86, CAM_DIST = 60;
-const view = { height: 17 };
+// 화면 좌표 y는 위쪽이 +. 북쪽 벽 꼭대기(높이 3.4)와 사방 벽 바깥 면까지가 화면 경계다.
+const SIN = Math.sin(PITCH), COS = Math.cos(PITCH), MIN_HEIGHT = 5;
+const EDGE = { left: MAP.minX - 0.45, right: MAP.maxX + 0.45, top: 3.4 * COS - MAP.minZ * SIN + 0.25 * SIN, bottom: -(MAP.maxZ + 0.45) * SIN };
+const maxHeight = () => Math.min(EDGE.top - EDGE.bottom, ((EDGE.right - EDGE.left) * innerHeight) / innerWidth);
+const view = { height: 14, free: null }; // free: 드래그로 둘러볼 때의 화면 중심 [x, y]
 const look = new THREE.Vector3();
+const viewWidth = () => (view.height * innerWidth) / innerHeight;
+function zoomTo(height) {
+  view.height = Math.min(maxHeight(), Math.max(MIN_HEIGHT, height));
+  fitCamera();
+}
 function fitCamera() {
-  const w = (view.height * innerWidth) / innerHeight;
+  const w = viewWidth();
   Object.assign(camera, { left: -w / 2, right: w / 2, top: view.height / 2, bottom: -view.height / 2 });
   camera.updateProjectionMatrix();
 }
 
 const keys = new Set();
 const typing = () => /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName ?? '');
-addEventListener('keydown', (e) => { if (!typing() && 'wasd'.includes(e.key.toLowerCase())) keys.add(e.key.toLowerCase()); });
+addEventListener('keydown', (e) => {
+  if (typing()) return;
+  const key = e.key.toLowerCase();
+  if ('wasd'.includes(key)) keys.add(key);
+  else if (key === '+' || key === '=') zoomTo(view.height * 0.8);
+  else if (key === '-') zoomTo(view.height * 1.25);
+});
 addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
 addEventListener('blur', () => keys.clear());
 
@@ -155,23 +170,44 @@ addEventListener('blur', () => keys.clear());
 const ray = new THREE.Raycaster();
 const ndc = new THREE.Vector2();
 let drag = null;
+const touches = new Map(); // 두 손가락 확대·축소용
+let pinch = 0;
+const pinchGap = () => { const [a, b] = touches.values(); return Math.hypot(a.x - b.x, a.y - b.y); };
 
 canvas.addEventListener('pointerdown', (e) => {
   drag = { x: e.clientX, y: e.clientY, moved: false };
   canvas.setPointerCapture(e.pointerId);
+  touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (touches.size === 2) { pinch = pinchGap(); drag.moved = true; }
 });
 canvas.addEventListener('pointermove', (e) => {
-  if (drag && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) >= 6) drag.moved = true;
+  if (touches.has(e.pointerId)) touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (touches.size === 2) {
+    const gap = pinchGap();
+    if (pinch && gap) zoomTo((view.height * pinch) / gap);
+    pinch = gap;
+    return;
+  }
+  if (!drag) return;
+  if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 6) return;
+  drag.moved = true;
+  const [x, y] = view.free ?? [look.x, -look.z * SIN];
+  view.free = [x - ((e.clientX - drag.x) * viewWidth()) / innerWidth, y + ((e.clientY - drag.y) * view.height) / innerHeight];
+  drag.x = e.clientX; drag.y = e.clientY;
 });
+const release = (e) => { touches.delete(e.pointerId); };
+canvas.addEventListener('pointercancel', (e) => { release(e); drag = null; });
 canvas.addEventListener('pointerup', (e) => {
+  release(e);
   const clicked = drag && !drag.moved;
-  drag = null;
+  if (!touches.size) drag = null;
   if (clicked) handleClick(e);
 });
+// 터치패드 핀치는 ctrl+휠로 들어오고 값이 작아서 더 크게 반영한다.
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
-  view.height = Math.min(26, Math.max(8, view.height + e.deltaY * 0.01));
-  fitCamera();
+  const unit = e.deltaMode === 1 ? 33 : 1;
+  zoomTo(view.height * Math.exp(e.deltaY * unit * (e.ctrlKey ? 0.01 : 0.002)));
 }, { passive: false });
 
 function handleClick(e) {
@@ -258,7 +294,7 @@ function removeAvatar(id) {
 
 function resize() {
   renderer.setSize(Math.ceil(innerWidth / PIXEL), Math.ceil(innerHeight / PIXEL), false);
-  fitCamera();
+  zoomTo(view.height);
 }
 addEventListener('resize', resize);
 
@@ -309,6 +345,7 @@ async function syncDoors() {
 }
 
 const clock = new THREE.Clock();
+let lookReady = false;
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime, now = performance.now();
 
@@ -318,10 +355,10 @@ function frame() {
     me.path = []; me.then = null;
     if (me.sitting) { me.sitting = false; me.mesh.position.y = 0; }
     const len = Math.hypot(kx, kz), dx = (kx / len) * SPEED * dt, dz = (kz / len) * SPEED * dt;
-    const nx = me.mesh.position.x + dx, nz = me.mesh.position.z + dz;
-    if (nx > MAP.minX && nx < MAP.maxX && nz > MAP.minZ && nz < MAP.maxZ && !office.blocked.has(toCell(nx, nz).join(','))) {
-      me.mesh.position.x = nx; me.mesh.position.z = nz;
-    }
+    // 축별로 따져서 가구나 벽에 닿으면 멈추지 않고 옆으로 미끄러진다.
+    const p = me.mesh.position, free = (x, z) => x > MAP.minX && x < MAP.maxX && z > MAP.minZ && z < MAP.maxZ && !office.blocked.has(toCell(x, z).join(','));
+    if (free(p.x + dx, p.z)) p.x += dx;
+    if (free(p.x, p.z + dz)) p.z += dz;
     me.mesh.rotation.y = Math.atan2(dx, dz);
     myMoving = true;
   } else if (me.path.length) {
@@ -353,8 +390,14 @@ function frame() {
     h.rotation.y += (target - h.rotation.y) * Math.min(1, dt * 6);
   });
 
-  // 세로는 방 전체가 보이게 거의 고정하고, 가로로 플레이어를 따라간다.
-  look.set(me.mesh.position.x, 0, Math.min(1.5, Math.max(-1.5, me.mesh.position.z)));
+  // 나를 따라가되 공간 경계에서 멈춘다. 그때부터는 내가 화면 구석으로 간다.
+  if (myMoving) view.free = null;
+  const [goalX, goalY] = view.free ?? [me.mesh.position.x, -me.mesh.position.z * SIN];
+  const [cx, cy] = clampView(goalX, goalY, viewWidth(), view.height, EDGE);
+  if (view.free) view.free = [cx, cy];
+  const ease = lookReady ? Math.min(1, dt * 7) : 1;
+  lookReady = true;
+  look.set(look.x + (cx - look.x) * ease, 0, look.z + (-cy / SIN - look.z) * ease);
   camera.position.set(look.x, look.y + Math.sin(PITCH) * CAM_DIST, look.z + Math.cos(PITCH) * CAM_DIST);
   camera.lookAt(look);
 
@@ -387,6 +430,9 @@ try {
     startMeeting,
     endMeeting,
   });
+  document.getElementById('zoom-in').onclick = () => zoomTo(view.height * 0.8);
+  document.getElementById('zoom-out').onclick = () => zoomTo(view.height * 1.25);
+  document.getElementById('near-me').onclick = () => { view.free = null; zoomTo(7); };
   onChange(syncAgents);
   onChange(syncDoors);
   await syncAgents();

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { findPath, nearestFree } from '../src/nav.js';
+import { clampView, findPath, nearestFree } from '../src/nav.js';
 import { analyze, parseDelimited } from '../src/analyze.js';
 import { driveEmbed, parseMentions, routeByKeywords } from '../src/agents.js';
 import handler from '../api/agent.js';
@@ -19,6 +19,12 @@ test('막힌 목표는 경로가 없고 nearestFree가 대체 칸을 준다', ()
   const blocked = new Set(['1,0', '1,1', '0,1']);
   assert.equal(findPath(blocked, 3, 3, [2, 2], [0, 0]), null);
   assert.deepEqual(nearestFree(new Set(['1,1']), 3, 3, [1, 1]), [0, 0]);
+});
+test('화면은 공간 경계 밖을 보여 주지 않는다', () => {
+  const box = { left: -10, right: 10, bottom: -5, top: 5 };
+  assert.deepEqual(clampView(-9, 4, 8, 4, box), [-6, 3]);
+  assert.deepEqual(clampView(0, 0, 8, 4, box), [0, 0]);
+  assert.deepEqual(clampView(9, 0, 30, 4, box), [0, 0]);
 });
 test('CSV 따옴표와 숫자 통계', () => {
   assert.deepEqual(parseDelimited('a,"b,c"\n1,"x""y"\n', ','), [['a', 'b,c'], ['1', 'x"y']]);

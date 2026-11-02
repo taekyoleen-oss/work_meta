@@ -32,6 +32,8 @@ h3 { margin: 18px 0 6px; font-size: 14px; }
 
 #hint { position: fixed; bottom: 66px; left: 50%; transform: translateX(-50%); margin: 0; padding: 5px 14px; background: #2f3a2cb0; color: #fff; border-radius: 99px; font-size: 13px; white-space: nowrap; pointer-events: none; }
 
+#view-tools { position: fixed; left: 14px; bottom: 14px; display: flex; gap: 6px; }
+#view-tools button { background: #fffaf3e8; min-width: 38px; }
 #labels { position: fixed; inset: 0; overflow: hidden; pointer-events: none; }
 .tag { position: absolute; left: 0; top: 0; padding: 3px 10px; border-radius: 9px; background: #23262dee; color: #fff; box-shadow: 0 2px 8px #0003; font-size: 12px; white-space: nowrap; }
 .tag.sign { background: #fffaf3ee; color: var(--ink); }
@@ -84,6 +86,7 @@ dialog::backdrop { background: #2f3a2c80; }
   #agent-list { display: flex; overflow-x: auto; }
   #agent-list button { white-space: nowrap; }
   #hint { display: none; }
+  #view-tools { bottom: 76px; }
   #dock button:nth-child(n+5) { display: none; }
   #panel { top: auto; left: 8px; right: 8px; bottom: 70px; width: auto; height: 56vh; }
   .board { grid-template-columns: repeat(2, minmax(0, 1fr)); }

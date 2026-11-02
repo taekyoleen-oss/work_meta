@@ -1,6 +1,12 @@
 // 격자 A* 길찾기. 3D와 무관한 순수 함수.
 const key = (x, y) => `${x},${y}`;
 
+// 화면 중심을 box 안으로 제한한다. 화면이 box보다 크면 가운데에 둔다.
+export function clampView(x, y, w, h, box) {
+  const fit = (v, half, lo, hi) => (lo + half > hi - half ? (lo + hi) / 2 : Math.min(hi - half, Math.max(lo + half, v)));
+  return [fit(x, w / 2, box.left, box.right), fit(y, h / 2, box.bottom, box.top)];
+}
+
 export function nearestFree(blocked, cols, rows, [cx, cy]) {
   for (let r = 0; r < Math.max(cols, rows); r++) {
     for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) {

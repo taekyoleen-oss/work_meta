@@ -27,7 +27,12 @@
     <div id="agent-list" aria-label="담당자 목록"></div>
   </header>
 
-  <p id="hint">바닥을 눌러 이동 · 휠로 확대 · 담당자, 서랍, 문을 눌러 열기 · 오른쪽 통로로 미팅룸의 앱 문까지 이동</p>
+  <div id="view-tools" role="group" aria-label="화면 조절">
+    <button id="zoom-out" aria-label="축소">−</button>
+    <button id="zoom-in" aria-label="확대">+</button>
+    <button id="near-me">내 근처로</button>
+  </div>
+  <p id="hint">바닥을 눌러 이동 · 끌어서 둘러보기 · 휠이나 +, −로 확대·축소 · 오른쪽 통로로 미팅룸의 앱 문까지 이동</p>
   <form id="chat" autocomplete="off">
     <span id="chat-target">총괄에게</span>
     <input id="chat-input" maxlength="2000" aria-label="사무실 대화" placeholder="여기에 말하면 총괄이 담당자에게 나눕니다">

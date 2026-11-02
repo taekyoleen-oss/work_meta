@@ -179,8 +179,16 @@ async function taskView(id) {
 }
 
 // 문서함
-// 일정 관리: 구글 캘린더는 다른 사이트 안에 넣을 수 없어 새 탭으로 연다.
-export function openCalendar() { select('btn-calendar'); show(calendarView); }
+// 일정 관리: 구글 캘린더 본 화면은 임베드를 막으므로, 서류장에 연결된 계정들의 캘린더를 임베드 주소로 앱 안 창에 띄운다.
+export async function openCalendar() {
+  select('btn-calendar');
+  const emails = [...new Set((await driveAccounts()).filter(Boolean))];
+  if (!emails.length) return show(calendarView);
+  const embed = new URL('https://calendar.google.com/calendar/embed');
+  for (const e of emails) embed.searchParams.append('src', e);
+  embed.searchParams.set('ctz', Intl.DateTimeFormat().resolvedOptions().timeZone);
+  await openDoc({ kind: 'link', title: '일정 관리 · 구글 캘린더', url: CALENDAR_HOME, embed: embed.href });
+}
 
 function calendarView() {
   return [
@@ -404,7 +412,7 @@ async function openDoc(d) {
   } else if (d.kind === 'link' || d.kind === 'drive') {
     newTab(gdrive.asUser(d.url, d.account));
     // 외부 사이트가 임베드를 막으면 빈 화면이 되므로 새 탭 링크를 항상 함께 둔다.
-    body.replaceChildren(h('iframe', { src: gdrive.asUser(driveEmbed(d.url) ?? d.url, d.account), title: d.title, sandbox: 'allow-scripts allow-same-origin allow-forms allow-popups' }));
+    body.replaceChildren(h('iframe', { src: d.embed ?? gdrive.asUser(driveEmbed(d.url) ?? d.url, d.account), title: d.title, sandbox: 'allow-scripts allow-same-origin allow-forms allow-popups' }));
   } else if (isHtml) {
     // 스크립트는 허용하되 allow-same-origin을 빼서 앱 저장소에 접근하지 못하게 격리한다.
     const frame = h('iframe', { title: d.title, sandbox: 'allow-scripts' });

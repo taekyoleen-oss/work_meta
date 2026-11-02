@@ -378,7 +378,7 @@ async function syncDriveSigns() {
   driveSigns.forEach((s, c) => { s.tag.textContent = accounts[c] ? `☁ 구글 드라이브\n${accounts[c]}` : `${CABINETS[c]}\n드라이브 연결하기`; });
 }
 const linkSigns = [...driveSigns,
-  makeLinkSign('일정 관리 · 구글 캘린더', { x: 0, z: -7.9 }, 3.25, walkToCalendar),
+  makeLinkSign('일정 관리 · 구글 캘린더', { x: 0, z: -7.9 }, 3.25, openCalendar),
 ];
 // 서류 캐비닛: 놓인 서류를 칸에 올리고 이름표를 단다. 넘치는 서류는 패널 목록에서 본다.
 const walkToShelf = (docId) => walkMe(...SHELF.stand, () => (docId ? openDocById(docId) : openDrawer('shelf')));

@@ -1,5 +1,5 @@
 // DOM 패널. 사용자 데이터는 textContent로만 넣는다.
-import { CABINETS, DRAWERS, MAX_AGENTS, all, del, get, onChange, put } from './store.js';
+import { CABINETS, DRAWERS, MAX_AGENTS, all, del, driveAccounts, get, onChange, put } from './store.js';
 import { AGENT_TYPES, accessKey, assign, driveEmbed, report, run } from './agents.js';
 import * as gdrive from './gdrive.js';
 
@@ -194,17 +194,18 @@ export function openDrawer(id = 'reports') { select('btn-docs'); show(() => draw
 
 async function drawerView(id) {
   const drawer = DRAWERS.find((d) => d.id === id), shelf = id === 'shelf';
+  accounts = await driveAccounts();
+  const account = accounts[drawer.cabinet];
   const docs = (await all('docs')).filter((d) => d.drawer === id).sort((a, b) => b.createdAt - a.createdAt);
   const title = h('input', { placeholder: '제목', 'aria-label': '링크 제목' });
   const url = h('input', { type: 'url', required: true, placeholder: 'https://… (웹페이지·앱 주소)', 'aria-label': '링크 주소' });
   const file = h('input', { type: 'file', multiple: true, 'aria-label': '파일 올리기' });
   if (shelf) file.accept = '.pdf,.ppt,.pptx,.key,.odp';
   const fileLabel = h('span', { textContent: shelf ? 'PDF, 슬라이드 파일 올리기' : 'PDF, HTML, 이미지, CSV 등 파일 넣기' });
-  file.addEventListener('change', () => guard(async () => {
-    const toDrive = gdrive.connected();
-    if (toDrive) fileLabel.textContent = '구글 드라이브에 올리는 중…';
+  file.addEventListener('change', () => withDrive(drawer.cabinet, async (email) => {
+    if (email) fileLabel.textContent = `${email} 드라이브에 올리는 중…`;
     for (const f of file.files) {
-      await put('docs', toDrive ? await gdrive.upload(f, f.name, id)
+      await put('docs', email ? await gdrive.upload(email, f, f.name, id)
         : { id: crypto.randomUUID(), kind: 'file', drawer: id, title: f.name, mime: f.type, blob: f, createdAt: Date.now() });
     }
   }));
@@ -222,10 +223,10 @@ async function drawerView(id) {
   const embed = link?.url && driveEmbed(link.url);
   return [
     headerRow(drawer.name, CABINETS[drawer.cabinet]),
-    driveStatus(),
+    driveStatus(drawer.cabinet),
     shelf ? h('p', { className: 'muted', textContent: '올린 서류는 캐비닛 칸에 이름과 함께 놓입니다(앞의 9건). PDF는 앱 안에서 바로 열립니다. 구글 드라이브에 저장한 슬라이드는 구글 미리보기로 앱 안에서 보고, 이 브라우저에만 저장한 슬라이드는 내려받아 엽니다.' }) : h('div', { className: 'drop drive' },
       h('div', { className: 'row' },
-        h('a', { className: 'btn primary', href: link?.url || DRIVE_HOME, target: '_blank', rel: 'noopener noreferrer', textContent: '구글 드라이브 열기' }),
+        h('a', { className: 'btn primary', href: link?.url || gdrive.asUser(DRIVE_HOME, account), target: '_blank', rel: 'noopener noreferrer', textContent: '구글 드라이브 열기' }),
         embed ? h('button', { textContent: '여기서 보기', on: { click: () => openDoc({ kind: 'link', title: `${drawer.name} 드라이브`, url: link.url, mime: '' }) } }) : null),
       h('form', { className: 'row', style: 'margin-top:8px', on: { submit: saveDrive } }, h('div', { className: 'grow' }, drive), h('button', { textContent: '연결' })),
       h('p', { className: 'muted', textContent: link?.url ? '이 서랍에 연결된 폴더를 엽니다.' : '폴더를 연결하기 전에는 내 드라이브를 새 탭으로 엽니다.' })),
@@ -240,50 +241,95 @@ async function drawerView(id) {
   ].flat();
 }
 
-// 구글 드라이브 저장 상태. 연결되어 있으면 올리는 파일이 드라이브에 저장된다.
-function driveStatus() {
+// 서류장별 구글 드라이브 계정 고르기와 연결 상태
+let accounts = [];
+const cabinetOf = (drawerId) => DRAWERS.find((x) => x.id === drawerId).cabinet;
+const setAccount = (cabinet, email) => { accounts[cabinet] = email; return put('links', { id: `drive:${cabinet}`, email }); };
+
+function driveStatus(cabinet) {
   if (!gdrive.clientId.get()) {
-    return h('p', { className: 'muted', textContent: '설정에 구글 클라이언트 ID를 넣으면 올린 파일을 구글 드라이브에 저장하고 불러옵니다. 지금은 이 브라우저에만 저장됩니다.' });
+    return h('p', { className: 'muted', textContent: '설정에 구글 클라이언트 ID를 넣으면 서류장마다 구글 드라이브 계정을 연결합니다. 지금은 이 브라우저에만 저장됩니다.' });
   }
-  if (!gdrive.connected()) {
-    return h('div', { className: 'row' },
-      h('button', { className: 'primary', textContent: '구글 드라이브 연결', on: { click: () => guard(async () => { await gdrive.connect(); await syncDrive(); }) } }),
-      h('span', { className: 'muted grow', textContent: '연결하면 올리는 파일이 드라이브에 저장되고, 저장된 파일을 불러옵니다.' }));
-  }
-  return h('div', { className: 'row' },
-    h('span', { className: 'muted grow', textContent: `구글 드라이브 '작은 사무실 서류' 폴더에 저장됩니다.` }),
-    h('button', { textContent: '드라이브에서 불러오기', on: { click: () => guard(syncDrive) } }));
+  const email = accounts[cabinet];
+  const known = [...new Set(accounts.filter(Boolean))];
+  const pick = h('select', { 'aria-label': `${CABINETS[cabinet]}의 구글 드라이브 계정`, on: { change: (e) => guard(async () => {
+    let v = e.target.value;
+    if (v === '+') {
+      v = prompt('연결할 구글 계정 이메일')?.trim() ?? '';
+      if (!v) return;
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) throw new Error('이메일 형식이 아닙니다.');
+    }
+    await setAccount(cabinet, v);
+  }) } },
+  h('option', { value: '', textContent: '연결 안 함 (이 브라우저에 저장)', selected: !email }),
+  known.map((a) => h('option', { value: a, textContent: `☁ ${a}`, selected: a === email })),
+  h('option', { value: '+', textContent: '다른 계정 추가…' }));
+  return h('div', { className: 'drop drive' },
+    h('label', {}, `${CABINETS[cabinet]}의 구글 드라이브`, pick),
+    !email ? h('p', { className: 'muted', textContent: '계정을 고르면 이 서류장에 올리는 파일이 그 계정의 드라이브에 저장됩니다.' })
+      : gdrive.connected(email)
+        ? h('div', { className: 'row' },
+          h('span', { className: 'muted grow', textContent: `연결됨 · ${email}의 '작은 사무실 서류' 폴더에 저장합니다.` }),
+          h('button', { textContent: '불러오기', on: { click: () => guard(() => syncDrive(email)) } }))
+        : h('div', { className: 'row' },
+          h('button', { className: 'primary', textContent: '드라이브 연결', on: { click: () => guard(() => connectCabinet(cabinet)) } }),
+          h('span', { className: 'muted grow', textContent: '계정 선택은 계속 유지됩니다. 로그인이 만료되면 다음에 누를 때 다시 이어집니다.' })));
 }
+// 서류장 계정으로 로그인한다. 로그인 창에서 다른 계정을 고르면 그 계정으로 바꿔 연결한다.
+async function connectCabinet(cabinet) {
+  const want = accounts[cabinet], email = await gdrive.connect(want);
+  if (email !== want) {
+    alert(`${want} 대신 ${email}(으)로 로그인되어 ${CABINETS[cabinet]}을 ${email}에 연결합니다.`);
+    await setAccount(cabinet, email);
+  }
+  await syncDrive(email);
+  return email;
+}
+// 클릭 안에서 바로 로그인 창을 열 수 있도록 연결이 필요하면 먼저 연결한다.
+const withDrive = (cabinet, fn) => guard(async () => {
+  let email = accounts[cabinet];
+  if (email && !gdrive.connected(email)) email = await connectCabinet(cabinet);
+  await fn(email);
+});
+const withAccount = (email, fn) => guard(async () => {
+  if (!gdrive.connected(email)) await gdrive.connect(email);
+  await fn();
+});
+
 async function guard(fn) {
   try { await fn(); } catch (e) { alert(e.message); }
   if (current) show(current, panel.classList.contains('wide'));
 }
 // 드라이브 목록을 기준으로 드라이브 문서 기록을 맞춘다.
-async function syncDrive() {
-  const remote = await gdrive.list(), ids = new Set(remote.map((d) => d.id));
-  for (const d of await all('docs')) if (d.kind === 'drive' && !ids.has(d.id)) await del('docs', d.id);
+async function syncDrive(email) {
+  const remote = await gdrive.list(email), ids = new Set(remote.map((d) => d.id));
+  for (const d of await all('docs')) if (d.kind === 'drive' && d.account === email && !ids.has(d.id)) await del('docs', d.id);
   for (const d of remote) await put('docs', d);
 }
 
 function docRow(d) {
   const drive = d.kind === 'drive';
-  const moveTo = (drawer) => guard(async () => {
-    if (drive) await gdrive.setDrawer(d.driveId, drawer);
+  const onDrive = (fn) => (drive ? withAccount(d.account, fn) : guard(fn));
+  const moveTo = (drawer) => onDrive(async () => {
+    if (drive) await gdrive.setDrawer(d.account, d.driveId, drawer);
     await put('docs', { ...d, drawer });
   });
-  const remove = () => confirm(drive ? `"${d.title}"을 삭제할까요? 구글 드라이브에서는 휴지통으로 옮겨집니다.` : `"${d.title}"을 삭제할까요?`) && guard(async () => {
-    if (drive) await gdrive.trash(d.driveId);
+  const remove = () => confirm(drive ? `"${d.title}"을 삭제할까요? ${d.account} 드라이브에서는 휴지통으로 옮겨집니다.` : `"${d.title}"을 삭제할까요?`) && onDrive(async () => {
+    if (drive) await gdrive.trash(d.account, d.driveId);
     await del('docs', d.id);
   });
-  const toDrive = () => guard(async () => {
-    await put('docs', await gdrive.upload(d.blob, d.title, d.drawer));
+  const cabinet = cabinetOf(d.drawer), target = accounts[cabinet];
+  const toDrive = () => withDrive(cabinet, async (email) => {
+    await put('docs', await gdrive.upload(email, d.blob, d.title, d.drawer));
     await del('docs', d.id);
   });
+  // 드라이브 파일은 같은 계정에 연결된 서류장 안에서만 옮긴다.
+  const targets = drive ? DRAWERS.filter((x) => x.id === d.drawer || accounts[x.cabinet] === d.account) : DRAWERS;
   const move = h('select', { 'aria-label': `${d.title} 서랍 이동`, style: 'width:auto', on: { change: (e) => moveTo(e.target.value) } },
-    DRAWERS.map((x) => h('option', { value: x.id, textContent: x.name, selected: x.id === d.drawer })));
+    targets.map((x) => h('option', { value: x.id, textContent: x.name, selected: x.id === d.drawer })));
   return h('div', { className: 'doc' },
-    h('button', { className: 'title', textContent: drive ? `☁ ${d.title}` : d.title, title: drive ? `${d.title} (구글 드라이브)` : d.title, on: { click: () => openDoc(d) } }), move,
-    d.kind === 'file' && gdrive.connected() ? h('button', { textContent: '드라이브로', title: '구글 드라이브에 저장', on: { click: toDrive } }) : null,
+    h('button', { className: 'title', textContent: drive ? `☁ ${d.title}` : d.title, title: drive ? `${d.title} (${d.account} 드라이브)` : d.title, on: { click: () => openDoc(d) } }), move,
+    d.kind === 'file' && target ? h('button', { textContent: '드라이브로', title: `${target} 드라이브에 저장`, on: { click: toDrive } }) : null,
     h('button', { className: 'danger', textContent: '삭제', 'aria-label': `${d.title} 삭제`, on: { click: remove } }));
 }
 
@@ -356,9 +402,9 @@ async function openDoc(d) {
   if (d.kind === 'text') {
     body.replaceChildren(h('pre', { textContent: d.text }));
   } else if (d.kind === 'link' || d.kind === 'drive') {
-    newTab(d.url);
+    newTab(gdrive.asUser(d.url, d.account));
     // 외부 사이트가 임베드를 막으면 빈 화면이 되므로 새 탭 링크를 항상 함께 둔다.
-    body.replaceChildren(h('iframe', { src: driveEmbed(d.url) ?? d.url, title: d.title, sandbox: 'allow-scripts allow-same-origin allow-forms allow-popups' }));
+    body.replaceChildren(h('iframe', { src: gdrive.asUser(driveEmbed(d.url) ?? d.url, d.account), title: d.title, sandbox: 'allow-scripts allow-same-origin allow-forms allow-popups' }));
   } else if (isHtml) {
     // 스크립트는 허용하되 allow-same-origin을 빼서 앱 저장소에 접근하지 못하게 격리한다.
     const frame = h('iframe', { title: d.title, sandbox: 'allow-scripts' });

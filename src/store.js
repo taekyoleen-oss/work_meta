@@ -23,6 +23,14 @@ const SEED_LINKS = [
   { id: 'door2', name: '', url: '' },
 ];
 
+// 서류장별 구글 드라이브 계정: links 저장소의 drive:<서류장 번호>. 빈 문자열은 '연결 안 함'.
+export const driveAccounts = () => Promise.all(CABINETS.map(async (_, i) => (await get('links', `drive:${i}`))?.email ?? ''));
+export async function seedDriveAccounts(emails) {
+  for (const [i, email] of emails.entries()) {
+    if (email && i < CABINETS.length && !(await get('links', `drive:${i}`))) await put('links', { id: `drive:${i}`, email });
+  }
+}
+
 let db;
 const listeners = new Set();
 export const onChange = (fn) => listeners.add(fn);

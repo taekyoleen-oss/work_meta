@@ -4,7 +4,7 @@ import { clampView, findPath, nearestFree } from '../src/nav.js';
 import { analyze, parseDelimited } from '../src/analyze.js';
 import { driveEmbed, parseMentions, routeByKeywords } from '../src/agents.js';
 import handler from '../api/agent.js';
-import { toDoc } from '../src/gdrive.js';
+import { asUser, toDoc } from '../src/gdrive.js';
 
 test('길찾기는 벽을 돌아가고 대각선으로 모서리를 뚫지 않는다', () => {
   const blocked = new Set(['2,0', '2,1', '2,2', '2,3']);
@@ -56,11 +56,12 @@ test('드라이브 주소만 임베드 주소로 바꾼다', () => {
 });
 
 test('드라이브 파일은 서랍 위치와 미리보기 주소를 가진 문서가 된다', () => {
-  const d = toDoc({ id: 'f1', name: '안.pptx', mimeType: 'application/vnd.ms-powerpoint', createdTime: '2026-11-02T00:00:00Z', appProperties: { drawer: 'shelf' } });
-  assert.equal(d.id, 'drive:f1');
+  const d = toDoc({ id: 'f1', name: '안.pptx', mimeType: 'application/vnd.ms-powerpoint', createdTime: '2026-11-02T00:00:00Z', appProperties: { drawer: 'shelf' } }, 'a@x.com');
+  assert.equal(d.id, 'drive:a@x.com:f1'); // 계정이 다르면 같은 파일 id여도 다른 기록
   assert.equal(d.drawer, 'shelf');
   assert.equal(driveEmbed(d.url), 'https://drive.google.com/file/d/f1/preview');
-  assert.equal(toDoc({ id: 'f2', name: 'x', mimeType: '' }).drawer, 'etc');
+  assert.equal(asUser(driveEmbed(d.url), d.account), 'https://drive.google.com/file/d/f1/preview?authuser=a%40x.com');
+  assert.equal(toDoc({ id: 'f2', name: 'x', mimeType: '' }, 'a@x.com').drawer, 'etc');
 });
 
 const call = async (body, headers = {}, method = 'POST') => {

@@ -2,7 +2,8 @@
 import * as THREE from 'three';
 import { BOARD_STAND, COFFEE_SPOT, COLS, MAP, MEETING, MEETING_ME, MEETING_SPOTS, MY_SEAT, ROOMS, ROWS, SHELF, SLOTS, buildOffice, doorSign, doorStand, drawerStand, makeAvatar, toCell, toWorld } from './world.js';
 import { clampView, findPath, nearestFree } from './nav.js';
-import { all, get, onChange, openStore } from './store.js';
+import { CABINETS, DRAWERS, all, driveAccounts, get, onChange, openStore, seedDriveAccounts } from './store.js';
+import { loadConfig } from './gdrive.js';
 import { recoverInterrupted, stage } from './agents.js';
 import { initUI, openAgent, openCalendar, openDocById, openDoor, openDrawer, openMeeting } from './ui.js';
 
@@ -366,9 +367,16 @@ function makeLinkSign(text, at, y, onClick) {
   return { tag, at, y };
 }
 const walkToDrawers = (id) => walkMe(...drawerStand(0), () => { slideDrawer(id); openDrawer(id); });
+const walkToCabinet = (c) => { const id = DRAWERS.find((d) => d.cabinet === c).id; walkMe(...drawerStand(c), () => { slideDrawer(id); openDrawer(id); }); };
 const walkToCalendar = () => walkMe(...BOARD_STAND, openCalendar);
-const linkSigns = [
-  makeLinkSign('구글 드라이브 열기', { x: drawerStand(1)[0], z: -7.5 }, 2.75, () => walkToDrawers('reports')),
+// 서류장마다 연결된 구글 드라이브 계정 안내판
+const driveSigns = [0, 1, 2].map((c) => makeLinkSign('', { x: drawerStand(c)[0], z: -7.5 }, 2.75, () => walkToCabinet(c)));
+for (const s of driveSigns) s.tag.classList.add('acct');
+async function syncDriveSigns() {
+  const accounts = await driveAccounts();
+  driveSigns.forEach((s, c) => { s.tag.textContent = accounts[c] ? `☁ 구글 드라이브\n${accounts[c]}` : `${CABINETS[c]}\n드라이브 연결하기`; });
+}
+const linkSigns = [...driveSigns,
   makeLinkSign('일정 관리 · 구글 캘린더', { x: 0, z: -7.9 }, 3.25, walkToCalendar),
 ];
 // 서류 캐비닛: 놓인 서류를 칸에 올리고 이름표를 단다. 넘치는 서류는 패널 목록에서 본다.
@@ -491,6 +499,7 @@ function frame() {
 let ui;
 try {
   await openStore();
+  await seedDriveAccounts((await loadConfig()).driveAccounts);
   await recoverInterrupted();
   ui = initUI({
     walkToAgent: (slot, id) => walkMe(...SLOTS[slot].stand, () => greet(id)),
@@ -509,9 +518,11 @@ try {
   onChange(syncAgents);
   onChange(syncDoors);
   onChange(syncShelf);
+  onChange(syncDriveSigns);
   await syncAgents();
   await syncDoors();
   await syncShelf();
+  await syncDriveSigns();
   resize();
   frame();
   setTimeout(() => { document.getElementById('hint').hidden = true; }, 15000); // 안내는 잠시 보이고 화면을 비워 준다

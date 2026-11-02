@@ -8,10 +8,18 @@ export const CABINETS = ['서류장 A', '서류장 B', '서류장 C'];
 export const MAX_AGENTS = 8;
 
 const SEED = [
-  { name: '김비서', role: '채팅 담당', type: 'claude', color: '#c8553d', system: '당신은 사무실의 채팅 비서입니다. 지시를 정리하고, 다른 담당자의 결과가 주어지면 핵심만 요약해 한국어로 보고하세요.' },
-  { name: '이분석', role: '데이터 분석', type: 'analyst', color: '#2a6f97' },
-  { name: '박연동', role: '외부 앱 연동', type: 'webhook', color: '#6a994e', url: '' },
-  { name: '최문서', role: '문서 검색', type: 'archivist', color: '#8e6c8a' },
+  { slot: 1, name: '김총괄', role: '총괄업무', gender: 'male', type: 'lead', color: '#35506e', keywords: ['총괄', '전체', '일정', '조율'] },
+  { slot: 0, name: '이조사', role: '조사업무', gender: 'female', type: 'archivist', color: '#c8553d', keywords: ['조사', '찾아', '검색', '문서', '자료'] },
+  { slot: 2, name: '박분석', role: '분석업무', gender: 'male', type: 'analyst', color: '#2a6f97', keywords: ['분석', '통계', '매출', '합계', '수치'] },
+  { slot: 3, name: '최마케팅', role: '마케팅업무', gender: 'female', type: 'claude', color: '#b0497f', keywords: ['마케팅', '홍보', '광고', '캠페인', '고객'],
+    system: '당신은 사무실의 마케팅 담당자입니다. 실행 가능한 마케팅 아이디어를 한국어로 간결하게 보고하세요.' },
+  { slot: 4, name: '정기타', role: '기타업무', gender: 'male', type: 'claude', color: '#6a994e', keywords: ['기타', '총무', '정리', '번역', '메일'],
+    system: '당신은 사무실의 지원 담당자입니다. 맡은 일을 처리하고 결과를 한국어로 간결하게 보고하세요.' },
+];
+const SEED_LINKS = [
+  { id: 'door0', name: 'AI4Insurance', url: 'https://www.ai4insurance.com/' },
+  { id: 'door1', name: '', url: '' },
+  { id: 'door2', name: '', url: '' },
 ];
 
 let db;
@@ -28,10 +36,16 @@ export async function put(name, value) { await req(store(name, 'readwrite').put(
 export async function del(name, id) { await req(store(name, 'readwrite').delete(id)); emit(); }
 
 export async function openStore() {
-  const open = indexedDB.open('work-meta', 1);
-  open.onupgradeneeded = () => ['agents', 'tasks', 'docs'].forEach((n) => open.result.createObjectStore(n, { keyPath: 'id' }));
+  const open = indexedDB.open('work-meta', 2);
+  open.onupgradeneeded = (e) => {
+    for (const n of ['agents', 'tasks', 'docs', 'links']) {
+      if (!open.result.objectStoreNames.contains(n)) open.result.createObjectStore(n, { keyPath: 'id' });
+    }
+    if (e.oldVersion === 1) open.transaction.objectStore('agents').clear(); // 5인 팀으로 교체. 업무·문서는 유지
+  };
   db = await req(open);
   if (!(await all('agents')).length) {
-    for (const [slot, a] of SEED.entries()) await put('agents', { id: crypto.randomUUID(), slot, ...a });
+    for (const a of SEED) await put('agents', { id: crypto.randomUUID(), ...a });
   }
+  if (!(await all('links')).length) for (const l of SEED_LINKS) await put('links', l);
 }

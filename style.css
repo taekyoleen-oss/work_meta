@@ -1,7 +1,7 @@
 :root { --paper: #fffaf3; --ink: #2f3a2c; --muted: #6f7768; --line: #e4dfd2; --accent: #2a6f97; --bad: #b3392f; --good: #4f7f3f; }
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; overflow: hidden; background: #e4e5d8; color: var(--ink); font: 15px/1.55 Pretendard, system-ui, sans-serif; }
-#scene { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: pointer; display: block; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #f2e3cf; color: var(--ink); font: 15px/1.55 Pretendard, system-ui, sans-serif; }
+#scene { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: pointer; display: block; image-rendering: pixelated; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { border: 1px solid var(--line); background: var(--paper); border-radius: 10px; padding: 7px 12px; cursor: pointer; }
 button:hover { border-color: var(--accent); }
@@ -22,7 +22,7 @@ h3 { margin: 18px 0 6px; font-size: 14px; }
 
 #hud { position: fixed; top: 14px; left: 14px; width: 190px; display: grid; gap: 10px; pointer-events: none; }
 #hud > * { pointer-events: auto; }
-.brand { color: #fff; text-shadow: 0 1px 6px #0007; pointer-events: none; }
+.brand { color: var(--ink); pointer-events: none; }
 .brand strong { display: block; font-size: 20px; letter-spacing: -.03em; }
 .brand span { font-size: 12px; }
 #dock, #agent-list { display: grid; gap: 6px; }
@@ -30,13 +30,22 @@ h3 { margin: 18px 0 6px; font-size: 14px; }
 #agent-list button { display: flex; gap: 8px; align-items: center; }
 .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
 
-#hint { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); margin: 0; padding: 5px 14px; background: #2f3a2cb0; color: #fff; border-radius: 99px; font-size: 13px; white-space: nowrap; pointer-events: none; }
+#hint { position: fixed; bottom: 66px; left: 50%; transform: translateX(-50%); margin: 0; padding: 5px 14px; background: #2f3a2cb0; color: #fff; border-radius: 99px; font-size: 13px; white-space: nowrap; pointer-events: none; }
 
 #labels { position: fixed; inset: 0; overflow: hidden; pointer-events: none; }
-.tag { position: absolute; left: 0; top: 0; padding: 3px 10px; border-radius: 99px; background: var(--paper); box-shadow: 0 2px 8px #0002; font-size: 12px; white-space: nowrap; }
+.tag { position: absolute; left: 0; top: 0; padding: 3px 10px; border-radius: 9px; background: #23262dee; color: #fff; box-shadow: 0 2px 8px #0003; font-size: 12px; white-space: nowrap; }
+.tag.sign { background: #fffaf3ee; color: var(--ink); }
 .tag small { color: var(--muted); }
-.tag.running { background: #ffe9b8; }
-.tag.failed { background: #f7d3cd; }
+.tag.me { background: #2a6f97; color: #fff; }
+.speech { position: absolute; left: 0; top: 0; max-width: 220px; padding: 6px 12px; border-radius: 12px; background: #fff; box-shadow: 0 3px 12px #0003; font-size: 13px; }
+#chat { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); width: min(620px, calc(100vw - 28px)); display: flex; gap: 8px; align-items: center; padding: 6px 8px 6px 14px; background: var(--paper); border-radius: 14px; box-shadow: 0 6px 20px #38412b40; }
+#chat-target { flex: none; font-size: 13px; font-weight: 600; color: var(--accent); }
+#chat input { flex: 1; min-width: 0; border: 0; background: none; }
+#chat button { flex: none; }
+a.btn { display: inline-block; padding: 7px 12px; border-radius: 10px; border: 1px solid var(--line); text-decoration: none; color: inherit; }
+a.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.tag.running { background: #ffe9b8; color: var(--ink); }
+.tag.failed { background: #f7d3cd; color: var(--ink); }
 
 #panel { position: fixed; top: 14px; right: 14px; bottom: 14px; width: min(440px, calc(100vw - 28px)); background: var(--paper); border-radius: 18px; box-shadow: 0 12px 40px #38412b40; padding: 18px; overflow-y: auto; }
 #panel.wide { width: min(900px, calc(100vw - 28px)); }
@@ -75,6 +84,7 @@ dialog::backdrop { background: #2f3a2c80; }
   #agent-list { display: flex; overflow-x: auto; }
   #agent-list button { white-space: nowrap; }
   #hint { display: none; }
-  #panel { top: auto; left: 8px; right: 8px; bottom: 8px; width: auto; height: 62vh; }
+  #dock button:nth-child(n+5) { display: none; }
+  #panel { top: auto; left: 8px; right: 8px; bottom: 70px; width: auto; height: 56vh; }
   .board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

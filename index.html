@@ -19,13 +19,20 @@
     <nav id="dock" aria-label="주요 메뉴">
       <button id="btn-board">업무 보드</button>
       <button id="btn-docs">문서함</button>
+      <button id="btn-meeting">회의 소집</button>
+      <button id="btn-door">앱 연결 문</button>
       <button id="btn-new-agent">담당자 추가</button>
       <button id="btn-settings">설정</button>
     </nav>
     <div id="agent-list" aria-label="담당자 목록"></div>
   </header>
 
-  <p id="hint">바닥을 눌러 이동 · 드래그로 시점 회전 · 담당자나 서랍을 눌러 열기</p>
+  <p id="hint">바닥을 눌러 이동 · 휠로 확대 · 담당자, 서랍, 문을 눌러 열기 · 오른쪽 통로로 미팅룸의 앱 문까지 이동</p>
+  <form id="chat" autocomplete="off">
+    <span id="chat-target">총괄에게</span>
+    <input id="chat-input" maxlength="2000" aria-label="사무실 대화" placeholder="여기에 말하면 총괄이 담당자에게 나눕니다">
+    <button class="primary">말하기</button>
+  </form>
   <aside id="panel" hidden aria-live="polite"></aside>
 
   <dialog id="viewer">

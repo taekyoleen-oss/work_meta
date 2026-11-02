@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { findPath, nearestFree } from '../src/nav.js';
 import { analyze, parseDelimited } from '../src/analyze.js';
-import { parseMentions } from '../src/agents.js';
+import { driveEmbed, parseMentions, routeByKeywords } from '../src/agents.js';
 import handler from '../api/agent.js';
 
 test('길찾기는 벽을 돌아가고 대각선으로 모서리를 뚫지 않는다', () => {
@@ -34,6 +34,18 @@ test('멘션은 실제 담당자만 인식하고 이메일은 건드리지 않�
   assert.deepEqual(targets, [a]);
   assert.equal(text, '@없는사람 매출 봐줘 me@x.com');
   assert.equal(parseMentions('봐줘 @이분석 a,b\n1,2', [a]).text, '봐줘 a,b\n1,2');
+});
+
+test('총괄은 키워드로 담당자를 고르고 자신은 제외한다', () => {
+  const lead = { type: 'lead', keywords: ['분석'] }, a = { type: 'analyst', keywords: ['분석'] }, m = { type: 'claude', keywords: ['홍보'] };
+  assert.deepEqual(routeByKeywords('매출 분석 부탁', [lead, a, m]), [a]);
+  assert.deepEqual(routeByKeywords('안녕', [lead, a, m]), []);
+});
+test('드라이브 주소만 임베드 주소로 바꾼다', () => {
+  assert.equal(driveEmbed('https://drive.google.com/drive/folders/abc-1?usp=sharing'), 'https://drive.google.com/embeddedfolderview?id=abc-1#list');
+  assert.equal(driveEmbed('https://docs.google.com/document/d/x_1/edit'), 'https://docs.google.com/document/d/x_1/preview');
+  assert.equal(driveEmbed('https://drive.google.com/drive/my-drive'), null);
+  assert.equal(driveEmbed('https://evil.com/drive/folders/abc'), null);
 });
 
 const call = async (body, headers = {}, method = 'POST') => {

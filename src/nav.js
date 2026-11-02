@@ -17,7 +17,7 @@ export function findPath(blocked, cols, rows, start, goal) {
   const best = new Map([[key(...start), 0]]);
   const from = new Map();
   while (open.length) {
-    // ponytail: 선형 최소 탐색. 현재 1,536칸이라 충분, 맵이 크게 늘면 힙으로 교체.
+    // ponytail: 선형 최소 탐색. 현재 2,432칸이라 충분, 맵이 크게 늘면 힙으로 교체.
     let i = 0;
     for (let j = 1; j < open.length; j++) if (open[j].f < open[i].f) i = j;
     const { p, g } = open.splice(i, 1)[0];

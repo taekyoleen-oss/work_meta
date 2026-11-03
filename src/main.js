@@ -5,6 +5,7 @@ import { clampView, findPath, nearestFree } from './nav.js';
 import { CABINETS, DRAWERS, all, driveAccounts, get, onChange, openStore, seedDriveAccounts } from './store.js';
 import { loadConfig } from './gdrive.js';
 import { recoverInterrupted, stage } from './agents.js';
+import { setDragDoc } from './drop.js';
 import { initUI, openAgent, openCalendar, openDocById, openDoor, openDrawer, openMeeting } from './ui.js';
 
 const canvas = document.getElementById('scene');
@@ -387,7 +388,10 @@ const shelfTags = office.shelf.map((slot) => {
   const tag = makeTag();
   tag.classList.add('sign', 'link', 'doc-name');
   tag.style.display = 'none';
-  return { slot, tag, doc: null };
+  const s = { slot, tag, doc: null };
+  tag.draggable = true; // 서류 이름표를 채팅창으로 끌어 첨부
+  tag.addEventListener('dragstart', (e) => s.doc && setDragDoc(e, s.doc.id, s.doc.title));
+  return s;
 });
 const binderColor = (d) => (/\.pdf$/i.test(d.title) ? '#d9534f' : /\.(pptx?|key|odp)$/i.test(d.title) || d.kind === 'link' ? '#e8963c' : '#5f7fb5');
 async function syncShelf() {

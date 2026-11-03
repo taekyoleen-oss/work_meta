@@ -5,6 +5,8 @@ import { analyze, parseDelimited } from '../src/analyze.js';
 import { driveEmbed, parseMentions, routeByKeywords } from '../src/agents.js';
 import handler from '../api/agent.js';
 import { asUser, toDoc } from '../src/gdrive.js';
+import { typeOf } from '../src/artifact.js';
+import { readDrop } from '../src/drop.js';
 
 test('길찾기는 벽을 돌아가고 대각선으로 모서리를 뚫지 않는다', () => {
   const blocked = new Set(['2,0', '2,1', '2,2', '2,3']);
@@ -94,4 +96,31 @@ test('서버는 내장 유형을 실행하지 않고 Claude 키 누락을 알린
   const r = await call({ agent: { type: 'claude' }, input: 'x' }, h);
   assert.equal(r.code, 503);
   assert.match(r.body.error, /ANTHROPIC_API_KEY/);
+});
+
+test('아티팩트 창은 파일마다 맞는 보기 방식을 고른다', () => {
+  const f = (title, mime = '') => typeOf({ kind: 'file', title, mime });
+  assert.equal(f('a.md'), 'markdown');
+  assert.equal(f('page.html', 'text/html'), 'html');
+  assert.equal(f('d.csv', 'text/csv'), 'table');
+  assert.equal(f('b.xlsx'), 'sheet');
+  assert.equal(f('r.docx'), 'docx');
+  assert.equal(f('s.pptx'), 'slides');
+  assert.equal(f('x.svg', 'image/svg+xml'), 'svg');
+  assert.equal(f('p.png', 'image/png'), 'image');
+  assert.equal(f('main.py'), 'code');
+  assert.equal(f('blob.bin', 'application/octet-stream'), 'other');
+  assert.equal(typeOf({ kind: 'text', title: '김총괄 보고 - 3.5% 성장' }), 'markdown'); // 제목의 점은 확장자가 아니다
+  assert.equal(typeOf({ kind: 'link', title: 'x', url: 'https://a.com' }), 'web');
+});
+
+test('채팅창에 놓인 것을 앱 문서·파일·링크·글로 구분한다', () => {
+  const dt = (data, files = []) => ({ files, getData: (k) => data[k] ?? '' });
+  assert.deepEqual(readDrop(dt({ 'application/x-office-doc': 'd1', 'text/plain': '보고서' })), [{ type: 'doc', id: 'd1' }]);
+  assert.equal(readDrop(dt({}, [{ name: 'a.pdf' }]))[0].type, 'file');
+  assert.deepEqual(readDrop(dt({ 'text/uri-list': 'https://news.example.com/a\r\n', 'text/plain': 'https://news.example.com/a', 'text/html': '<a href="x">금리 &amp; 환율 기사</a>' })),
+    [{ type: 'link', url: 'https://news.example.com/a', title: '금리 & 환율 기사' }]);
+  assert.deepEqual(readDrop(dt({ 'text/plain': 'https://b.com/x' })), [{ type: 'link', url: 'https://b.com/x', title: 'b.com' }]);
+  assert.deepEqual(readDrop(dt({ 'text/plain': '제목: 회의 일정\n내일 3시' })), [{ type: 'text', text: '제목: 회의 일정\n내일 3시' }]);
+  assert.deepEqual(readDrop(dt({})), []);
 });

@@ -17,7 +17,7 @@ export function parseDelimited(text, sep) {
   return rows.filter((r) => r.some((c) => c.trim()));
 }
 
-function detectTable(text) {
+export function detectTable(text) {
   for (const sep of [',', '\t']) {
     const rows = parseDelimited(text, sep);
     if (rows.length >= 2 && rows[0].length >= 2 && rows.every((r) => r.length === rows[0].length)) return rows;

@@ -83,8 +83,36 @@ a.btn.primary { background: var(--accent); border-color: var(--accent); color: #
 dialog { border: 0; border-radius: 16px; padding: 18px; background: var(--paper); color: var(--ink); box-shadow: 0 16px 50px #0005; }
 dialog::backdrop { background: #2f3a2c80; }
 #settings { width: min(420px, 92vw); }
-#viewer { width: 92vw; height: 90vh; padding: 0; overflow: hidden; }
+/* 아티팩트 창: 오른쪽에 붙고, 전체 보기로 넓어진다. 열려 있어도 사무실은 계속 쓸 수 있다. */
+:root { --art-w: min(760px, calc(100vw - 28px)); }
+#viewer { position: fixed; inset: 14px 14px 14px auto; width: var(--art-w); height: auto; max-width: none; max-height: none; margin: 0; padding: 0; overflow: hidden; z-index: 30; box-shadow: 0 12px 40px #38412b55; }
+#viewer.full { inset: 14px; width: auto; }
 #viewer[open] { display: flex; flex-direction: column; }
+@media (min-width: 1240px) { body.art-open #panel { right: calc(var(--art-w) + 28px); } }
+#viewer > header .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #e6efe0; color: #46613a; white-space: nowrap; }
+#viewer-title { cursor: grab; }
+#viewer-actions { display: flex; gap: 6px; align-items: center; }
+#viewer-actions a { font-size: 13px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+#viewer-body > p.empty { padding: 24px; color: var(--muted); }
+#viewer-body .fit { max-width: 100%; max-height: 100%; display: block; margin: auto; }
+#viewer-body pre.code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; line-height: 1.5; }
+#viewer-body .table-wrap { padding: 12px; }
+#viewer-body table { border-collapse: collapse; font-size: 13px; }
+#viewer-body th, #viewer-body td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; white-space: nowrap; }
+#viewer-body th { background: #f4efe4; position: sticky; top: 0; }
+#viewer-body .sheet-tabs { margin: 10px 12px 0; }
+.bubble.result[title] { cursor: pointer; }
+.bubble.result[title]:hover { border-color: var(--accent); }
+/* 채팅창 드롭과 첨부 */
+#chat.drop-on { outline: 3px dashed var(--accent); outline-offset: 3px; }
+#chat-attach { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); display: flex; flex-wrap: wrap; gap: 6px; }
+#chat-attach[hidden] { display: none; }
+#chat-attach .chip { display: inline-flex; align-items: center; gap: 4px; max-width: 240px; padding: 4px 6px 4px 10px; border-radius: 999px; background: var(--paper); border: 1px solid var(--line); box-shadow: 0 3px 10px #0002; font-size: 12px; }
+#chat-attach .chip .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 0; background: none; padding: 0; font: inherit; cursor: pointer; }
+#chat-attach .chip .x { border: 0; background: none; padding: 0 4px; cursor: pointer; }
 #viewer > header { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); }
 #viewer-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #viewer-body { flex: 1; min-height: 0; background: #fff; overflow: auto; }
@@ -101,5 +129,6 @@ dialog::backdrop { background: #2f3a2c80; }
   #hint { display: none; }
   #view-tools { bottom: 76px; }
   #panel { top: auto; left: 8px; right: 8px; bottom: 70px; width: auto; height: 56vh; }
+  #viewer, #viewer.full { inset: 8px; width: auto; }
   .board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

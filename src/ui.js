@@ -2,6 +2,9 @@
 import { CABINETS, DRAWERS, MAX_AGENTS, all, del, driveAccounts, get, onChange, put } from './store.js';
 import { AGENT_TYPES, accessKey, assign, driveEmbed, report, run } from './agents.js';
 import * as gdrive from './gdrive.js';
+import { initArtifact, openDoc } from './artifact.js';
+import { h } from './dom.js';
+import { dragDoc, initChatDrop, takeAttachments } from './drop.js';
 
 const $ = (id) => document.getElementById(id);
 const panel = $('panel');
@@ -19,16 +22,6 @@ function select(key) {
 const DRIVE_HOME = 'https://drive.google.com/drive/my-drive';
 const CALENDAR_HOME = 'https://calendar.google.com/calendar/u/0/r';
 
-function h(tag, props = {}, ...kids) {
-  const el = document.createElement(tag);
-  for (const [k, v] of Object.entries(props)) {
-    if (k === 'on') for (const [ev, fn] of Object.entries(v)) el.addEventListener(ev, fn);
-    else if (k in el && k !== 'list') el[k] = v;
-    else el.setAttribute(k, v);
-  }
-  el.append(...kids.flat().filter((c) => c !== null && c !== undefined));
-  return el;
-}
 
 const STATUS = { queued: '대기', running: '진행', done: '완료', failed: '실패' };
 const time = (ms) => new Date(ms).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -93,8 +86,19 @@ function bubbles(t) {
   if (t.status === 'running') out.push(h('div', { className: 'bubble', textContent: '작업 중…' }));
   if (t.status === 'queued') out.push(h('div', { className: 'bubble' }, t.pending ? `접수됨: ${t.pending} ` : '보고 대기 중', t.pending ? h('button', { textContent: '다시 처리', on: { click: () => run(t) } }) : null));
   if (t.status === 'failed') out.push(h('div', { className: 'bubble fail' }, `실패: ${t.error}`, ' ', h('button', { textContent: '재시도', on: { click: () => run(t) } })));
-  if (t.status === 'done') out.push(h('div', { className: 'bubble', textContent: t.result }));
+  if (t.status === 'done') out.push(resultBubble(t));
   return out;
+}
+
+// 결과물: 눌러서 아티팩트로 보고, 채팅창으로 끌어 다음 요청에 붙인다.
+function resultBubble(t, style = '') {
+  const el = h('div', { className: 'bubble result', style, textContent: t.result });
+  if (t.resultDocId) {
+    el.title = '눌러서 오른쪽에 크게 보기 · 채팅창으로 끌어 첨부';
+    el.addEventListener('click', async () => openDoc(await get('docs', t.resultDocId)));
+    dragDoc(el, t.resultDocId, `${t.input.slice(0, 24)} 결과`);
+  }
+  return el;
 }
 
 async function agentForm(agent = null) {
@@ -145,8 +149,12 @@ async function boardView() {
     h('div', { className: 'board' }, Object.entries(STATUS).map(([s, label]) => {
       const list = tasks.filter((t) => t.status === s);
       return h('section', { className: 'col' }, h('h3', { textContent: `${label} ${list.length}` }),
-        list.map((t) => h('button', { className: 'card', on: { click: () => show(() => taskView(t.id)) } },
-          t.input.slice(0, 40), h('small', { textContent: `${nameOf(t.agentId)} · ${time(t.createdAt)}` }))));
+        list.map((t) => {
+          const card = h('button', { className: 'card', on: { click: () => show(() => taskView(t.id)) } },
+            t.input.slice(0, 40), h('small', { textContent: `${nameOf(t.agentId)} · ${time(t.createdAt)}` }));
+          if (t.resultDocId) { card.title = '결과를 채팅창으로 끌어 첨부할 수 있습니다'; dragDoc(card, t.resultDocId, `${t.input.slice(0, 24)} 결과`); }
+          return card;
+        }));
     })),
   ];
 }
@@ -165,7 +173,7 @@ async function taskView(id) {
   return [
     headerRow('업무 상세', `${agent?.name ?? '삭제된 담당자'} · ${STATUS[t.status]}`),
     h('div', { className: 'bubble me', textContent: t.input }),
-    t.result ? h('div', { className: 'bubble', style: 'margin-top:8px', textContent: t.result }) : null,
+    t.result ? resultBubble(t, 'margin-top:8px') : null,
     t.error ? h('div', { className: 'bubble fail', style: 'margin-top:8px', textContent: t.error }) : null,
     h('h3', { textContent: '진행 기록' }),
     h('ol', { className: 'log' }, t.log.map((l) => h('li', { textContent: `${time(l.at)} ${l.text}` }))),
@@ -335,10 +343,12 @@ function docRow(d) {
   const targets = drive ? DRAWERS.filter((x) => x.id === d.drawer || accounts[x.cabinet] === d.account) : DRAWERS;
   const move = h('select', { 'aria-label': `${d.title} 서랍 이동`, style: 'width:auto', on: { change: (e) => moveTo(e.target.value) } },
     targets.map((x) => h('option', { value: x.id, textContent: x.name, selected: x.id === d.drawer })));
-  return h('div', { className: 'doc' },
+  const row = h('div', { className: 'doc' },
     h('button', { className: 'title', textContent: drive ? `☁ ${d.title}` : d.title, title: drive ? `${d.title} (${d.account} 드라이브)` : d.title, on: { click: () => openDoc(d) } }), move,
     d.kind === 'file' && target ? h('button', { textContent: '드라이브로', title: `${target} 드라이브에 저장`, on: { click: toDrive } }) : null,
     h('button', { className: 'danger', textContent: '삭제', 'aria-label': `${d.title} 삭제`, on: { click: remove } }));
+  dragDoc(row, d.id, d.title);
+  return row;
 }
 
 // 앱 연결 문
@@ -396,42 +406,6 @@ async function meetingView() {
 export async function openDocById(id) {
   const d = await get('docs', id);
   if (d) await openDoc(d);
-}
-
-let blobUrl = null;
-async function openDoc(d) {
-  if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
-  const body = $('viewer-body'), actions = $('viewer-actions');
-  $('viewer-title').textContent = d.title;
-  actions.replaceChildren();
-  const newTab = (href) => actions.append(h('a', { href, target: '_blank', rel: 'noopener noreferrer', textContent: '새 탭에서 열기' }));
-  const isHtml = /html/.test(d.mime) || /\.html?$/i.test(d.title);
-  const isPdf = d.mime === 'application/pdf' || /\.pdf$/i.test(d.title);
-  if (d.kind === 'text') {
-    body.replaceChildren(h('pre', { textContent: d.text }));
-  } else if (d.kind === 'link' || d.kind === 'drive') {
-    newTab(gdrive.asUser(d.url, d.account));
-    // 외부 사이트가 임베드를 막으면 빈 화면이 되므로 새 탭 링크를 항상 함께 둔다.
-    body.replaceChildren(h('iframe', { src: d.embed ?? gdrive.asUser(driveEmbed(d.url) ?? d.url, d.account), title: d.title, sandbox: 'allow-scripts allow-same-origin allow-forms allow-popups' }));
-  } else if (isHtml) {
-    // 스크립트는 허용하되 allow-same-origin을 빼서 앱 저장소에 접근하지 못하게 격리한다.
-    const frame = h('iframe', { title: d.title, sandbox: 'allow-scripts' });
-    frame.srcdoc = await d.blob.text();
-    body.replaceChildren(frame);
-  } else if (isPdf) {
-    blobUrl = URL.createObjectURL(new Blob([d.blob], { type: 'application/pdf' }));
-    newTab(blobUrl);
-    body.replaceChildren(h('iframe', { src: blobUrl, title: d.title }));
-  } else if (d.mime.startsWith('image/') && d.mime !== 'image/svg+xml') {
-    blobUrl = URL.createObjectURL(d.blob);
-    body.replaceChildren(h('img', { src: blobUrl, alt: d.title }));
-  } else if (/^text\/|json|csv|[/+]xml$/.test(d.mime) || /\.(csv|tsv|txt|md|json)$/i.test(d.title)) {
-    body.replaceChildren(h('pre', { textContent: await d.blob.text() }));
-  } else {
-    blobUrl = URL.createObjectURL(d.blob);
-    body.replaceChildren(h('p', { style: 'padding:18px' }, /\.(pptx?|key|odp)$/i.test(d.title) ? '슬라이드 파일은 브라우저에서 바로 볼 수 없습니다. 내려받아 여세요. ' : '이 형식은 미리 볼 수 없습니다. ', h('a', { href: blobUrl, download: d.title, textContent: '내려받기' })));
-  }
-  $('viewer').showModal();
 }
 
 async function renderAgentList() {
@@ -522,9 +496,9 @@ export function initUI(context) {
     if (current) show(current, panel.classList.contains('wide'));
   });
   gdrive.preload();
-  $('viewer-close').onclick = () => $('viewer').close();
-  $('viewer').addEventListener('close', () => $('viewer-body').replaceChildren());
-  addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.hidden && !document.querySelector('dialog[open]')) closePanel(); });
+  initArtifact();
+  initChatDrop();
+  addEventListener('keydown', (e) => { if (e.key === 'Escape' && !e.defaultPrevented && !panel.hidden && !document.querySelector('dialog[open]')) closePanel(); });
   // 사용자가 입력 중이면 다시 그리지 않아 포커스와 초안을 지킨다.
   onChange(() => {
     renderAgentList();
@@ -544,11 +518,12 @@ function setTalkTarget(agent) {
 }
 async function sendChat(e) {
   e.preventDefault();
-  const box = $('chat-input'), text = box.value.trim();
+  const box = $('chat-input'), docIds = takeAttachments();
+  const text = box.value.trim() || (docIds.length ? '첨부한 자료를 검토하고 정리해 주세요.' : '');
   if (!text) return;
   box.value = '';
-  ctx.meSay(text);
+  ctx.meSay(docIds.length ? `${text} (첨부 ${docIds.length}건)` : text);
   const agents = await all('agents');
   const to = talkTarget ?? agents.find((a) => a.type === 'lead') ?? agents[0];
-  await assign({ agentId: to.id, input: text });
+  await assign({ agentId: to.id, input: text, docIds });
 }

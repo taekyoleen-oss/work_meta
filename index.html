@@ -39,6 +39,7 @@
   </div>
   <p id="hint">바닥을 눌러 이동 · 끌어서 둘러보기 · 휠이나 +, −로 확대·축소 · 오른쪽 통로로 미팅룸의 앱 문까지 이동</p>
   <form id="chat" autocomplete="off">
+    <div id="chat-attach" hidden></div>
     <button type="button" class="grip" aria-label="대화창 옮기기" title="끌어서 옮기기 · 두 번 누르면 원래 자리로">⠿</button>
     <span id="chat-target">총괄에게</span>
     <input id="chat-input" maxlength="2000" aria-label="사무실 대화" placeholder="여기에 말하면 총괄이 담당자에게 나눕니다">
@@ -47,7 +48,7 @@
   <aside id="panel" hidden aria-live="polite"></aside>
 
   <dialog id="viewer">
-    <header><strong id="viewer-title"></strong><span id="viewer-actions"></span><button id="viewer-close">닫기</button></header>
+    <header><span id="viewer-type" class="badge"></span><strong id="viewer-title" draggable="true" title="두 번 누르면 전체 보기 · 채팅창으로 끌어 첨부"></strong><span id="viewer-actions"></span><button id="viewer-full">전체 보기</button><button id="viewer-close" aria-label="아티팩트 닫기">닫기</button></header>
     <div id="viewer-body"></div>
   </dialog>
 

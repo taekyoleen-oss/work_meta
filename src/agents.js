@@ -1,6 +1,6 @@
 // 업무 실행기: 담당자 유형별 실행, 협업 연결, 결과의 서랍 보관.
 import { all, get, put } from './store.js';
-import { analyze } from './analyze.js';
+import { analyze, detectTable } from './analyze.js';
 
 export const AGENT_TYPES = {
   lead: '총괄 (업무 배분)',
@@ -28,7 +28,8 @@ export async function docText(doc) {
   if (doc.kind === 'text') return doc.text;
   if (doc.kind === 'link' || doc.kind === 'drive') return doc.url;
   if (/^text\/|json|xml|csv/.test(doc.mime) || /\.(csv|tsv|txt|md|json|html?)$/i.test(doc.title)) return doc.blob.text();
-  throw new Error(`이 문서 형식은 내용을 읽을 수 없습니다: ${doc.title}`);
+  // 이미지·오피스 파일 등은 내용을 못 읽으므로 무엇이 첨부됐는지만 알린다.
+  return `(파일 ${doc.title} · ${doc.mime || '형식 모름'} · ${Math.ceil((doc.blob?.size ?? 0) / 1024)}KB, 내용은 읽지 못함)`;
 }
 
 export function parseMentions(input, agents) {
@@ -61,12 +62,13 @@ async function callServer(agent, input, history = []) {
   return body.result;
 }
 
-async function execute(agent, input, doc, context) {
+async function execute(agent, input, docs, context) {
   if (agent.type === 'lead') {
     return context ? `담당별 결과\n${context}` : '맡길 담당자를 정하지 못했습니다. @이름으로 지정해 주세요.';
   }
-  const attached = doc ? await docText(doc) : '';
-  if (agent.type === 'analyst') return analyze(attached || input);
+  const texts = await Promise.all(docs.map(docText));
+  const attached = texts.map((t, i) => `[첨부: ${docs[i].title}]\n${t}`).join('\n\n');
+  if (agent.type === 'analyst') return analyze(texts.find((t) => detectTable(t.trim())) ?? texts[0] ?? input); // 첨부가 여럿이면 표를 먼저
   if (agent.type === 'archivist') {
     const words = input.toLowerCase().split(/\s+/).filter(Boolean);
     const docs = await all('docs');
@@ -75,7 +77,7 @@ async function execute(agent, input, doc, context) {
   }
   if (attached.length > MAX_ATTACHMENT) throw new Error(`첨부가 너무 깁니다 (${MAX_ATTACHMENT.toLocaleString()}자 제한).`);
   const parts = [input];
-  if (attached) parts.push(`[첨부: ${doc.title}]\n${attached}`);
+  if (attached) parts.push(attached);
   if (context) parts.push(`[다른 담당자 결과]\n${context}`);
   const prompt = parts.join('\n\n');
   if (agent.type === 'webhook') {
@@ -103,16 +105,16 @@ export async function run(task) {
     for (const other of others) {
       await stage.visit(agent, other, text); // 동료 자리로 걸어가 말을 건다
       // 멘션을 제거한 text만 넘기므로 하위 업무가 다시 위임하는 일은 없다.
-      const sub = await assign({ agentId: other.id, input: text || task.input, docId: task.docId, parentId: task.id });
+      const sub = await assign({ agentId: other.id, input: text || task.input, docIds: docIdsOf(task), parentId: task.id });
       stamp(task, `${other.name}와 협업 → ${{ done: '결과 수신', failed: '실패' }[sub.status] ?? '접수됨'}`);
       await put('tasks', task);
       context += `${other.name}: ${sub.result ?? sub.error ?? `접수됨 (${sub.pending ?? '담당자 확인 대기'})`}\n`;
     }
     if (others.length) stage.home(agent);
-    const doc = task.docId ? await get('docs', task.docId) : null;
+    const docs = (await Promise.all(docIdsOf(task).map((id) => get('docs', id)))).filter(Boolean);
     let result;
     try {
-      result = await execute(agent, text || task.input, doc, context);
+      result = await execute(agent, text || task.input, docs, context);
     } catch (e) {
       if (!context) throw e;
       result = `${context}\n(${agent.name} 요약 실패: ${e.message})`; // 위임 결과는 버리지 않는다.
@@ -139,9 +141,10 @@ export async function run(task) {
   return put('tasks', task);
 }
 
-export async function assign({ agentId, input, docId = null, parentId = null }) {
+const docIdsOf = (task) => task.docIds ?? (task.docId ? [task.docId] : []); // 예전 업무는 docId 하나
+export async function assign({ agentId, input, docId = null, docIds = docId ? [docId] : [], parentId = null }) {
   const agent = await get('agents', agentId);
-  const task = { id: crypto.randomUUID(), agentId, input, docId, parentId, status: 'queued', result: null, error: null, pending: null, createdAt: Date.now(), log: [] };
+  const task = { id: crypto.randomUUID(), agentId, input, docIds, parentId, status: 'queued', result: null, error: null, pending: null, createdAt: Date.now(), log: [] };
   stamp(task, `${agent.name}에게 지시`);
   await put('tasks', task);
   stage.say(agent, '네, 알겠습니다.');
